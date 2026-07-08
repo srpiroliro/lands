@@ -5,12 +5,34 @@ import type { ReviewPlugin, ReviewRequestMessage, ReviewThreadRef } from "@/lib/
 
 const slack = new WebClient(env.SLACK_BOT_TOKEN)
 
-function proposalUrl(proposalId: string): string {
-  return `${env.APP_BASE_URL}/proposals/${proposalId}`
+function proposalUrl(input: ReviewRequestMessage): string {
+  return input.internalProposalUrl ?? `${env.APP_BASE_URL}/proposals/${input.proposalId}`
+}
+
+function formatCents(cents: number | undefined): string {
+  if (typeof cents !== "number" || !Number.isFinite(cents)) {
+    return "Not provided"
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(cents / 100)
+}
+
+function formatList(items: string[] | undefined): string {
+  const presentItems = (items ?? []).map((item) => item.trim()).filter(Boolean)
+
+  if (presentItems.length === 0) {
+    return "None"
+  }
+
+  return presentItems.map((item) => `• ${item}`).join("\n")
 }
 
 function actionBlocks(input: ReviewRequestMessage): unknown[] {
-  const url = proposalUrl(input.proposalId)
+  const url = proposalUrl(input)
 
   return [
     {
@@ -24,8 +46,10 @@ function actionBlocks(input: ReviewRequestMessage): unknown[] {
     {
       type: "section",
       fields: [
-        { type: "mrkdwn", text: `*Proposal:*\n<${url}|Open internal proposal>` },
-        { type: "mrkdwn", text: "*Review notes:*\nCheck total, warnings, and blockers before approval." },
+        { type: "mrkdwn", text: `*Total:*\n${formatCents(input.totalCents)}` },
+        { type: "mrkdwn", text: `*Internal proposal:*\n<${url}|Open proposal>` },
+        { type: "mrkdwn", text: `*Warnings:*\n${formatList(input.warnings)}` },
+        { type: "mrkdwn", text: `*Blockers:*\n${formatList(input.blockers)}` },
       ],
     },
     ...input.blocks,

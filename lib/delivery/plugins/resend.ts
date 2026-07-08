@@ -3,8 +3,6 @@ import { Resend } from "resend"
 import type { DeliveryPlugin } from "@/lib/delivery/types"
 import { env } from "@/lib/env"
 
-const resend = new Resend(env.RESEND_API_KEY)
-
 export const resendDeliveryPlugin: DeliveryPlugin = {
   async deliver(input) {
     if (input.channel !== "email") {
@@ -14,6 +12,8 @@ export const resendDeliveryPlugin: DeliveryPlugin = {
     if (!env.RESEND_API_KEY || !env.RESEND_FROM) {
       throw new Error("Resend delivery is not configured; set RESEND_API_KEY and RESEND_FROM.")
     }
+
+    const resend = new Resend(env.RESEND_API_KEY)
 
     const { data, error } = await resend.emails.send(
       {
