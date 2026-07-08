@@ -1,0 +1,262 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LeadStatus {
+  NEW
+  DRAFTING
+  PENDING_REVIEW
+  REVISING
+  APPROVED
+  REJECTED
+  DELIVERED
+  BLOCKED
+}
+
+enum ProposalStatus {
+  DRAFT
+  PENDING_REVIEW
+  REVISING
+  APPROVED
+  REJECTED
+  DELIVERED
+  BLOCKED
+}
+
+enum QuantitySource {
+  USER
+  AI_ESTIMATE
+  CATALOG_DEFAULT
+  MANUAL_OVERRIDE
+}
+
+enum GuardrailSeverity {
+  INFO
+  WARNING
+  BLOCKING
+}
+
+enum ReviewStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum RevisionStatus {
+  RECEIVED
+  PROCESSING
+  APPLIED
+  FAILED
+}
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
+model Lead {
+  id             String     @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  address        String?
+  projectType    String
+  budgetMinCents Int?
+  budgetMaxCents Int?
+  notes          String
+  source         String     @default("web-demo")
+  status         LeadStatus @default(NEW)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  photos         Photo[]
+  proposals      Proposal[]
+}
+
+model Photo {
+  id           String   @id @default(cuid())
+  leadId       String
+  url          String
+  downloadUrl  String?
+  pathname     String
+  contentType  String
+  sizeBytes    Int
+  aiCaption    String?
+  aiConfidence Decimal? @db.Decimal(4, 3)
+  createdAt    DateTime @default(now())
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+model PricingItem {
+  id                  String   @id @default(cuid())
+  sku                 String   @unique
+  category            String
+  name                String
+  description         String
+  unit                String
+  unitPriceCents      Int
+  minQty              Decimal? @db.Decimal(10, 2)
+  maxQty              Decimal? @db.Decimal(10, 2)
+  requiresMeasurement Boolean  @default(true)
+  requiresReview      Boolean  @default(false)
+  active              Boolean  @default(true)
+  tags                String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  lineItems           ProposalLineItem[]
+}
+
+model Proposal {
+  id               String         @id @default(cuid())
+  leadId           String
+  publicToken      String         @unique
+  status           ProposalStatus @default(DRAFT)
+  currentVersionId String?
+  totalCents       Int            @default(0)
+  confidence       Decimal        @default(0) @db.Decimal(4, 3)
+  approvedAt       DateTime?
+  deliveredAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  lead             Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  versions         ProposalVersion[]
+  reviews          ProposalReview[]
+  revisions        RevisionRequest[]
+  deliveryLogs     DeliveryLog[]
+
+  @@index([leadId])
+  @@index([status])
+}
+
+model ProposalVersion {
+  id               String   @id @default(cuid())
+  proposalId       String
+  versionNumber    Int
+  aiModel          String
+  promptVersion    String
+  executiveSummary String
+  customerMessage  String
+  renderBrief      String?
+  totalCents       Int
+  confidence       Decimal  @db.Decimal(4, 3)
+  rawModelJson     Json
+  createdAt        DateTime @default(now())
+  proposal         Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  lineItems        ProposalLineItem[]
+  guardrails       GuardrailIssue[]
+  reviews          ProposalReview[]
+
+  @@unique([proposalId, versionNumber])
+  @@index([proposalId])
+}
+
+model ProposalLineItem {
+  id              String          @id @default(cuid())
+  versionId       String
+  pricingItemId   String
+  sku             String
+  name            String
+  description     String
+  unit            String
+  quantity        Decimal         @db.Decimal(10, 2)
+  quantitySource  QuantitySource
+  unitPriceCents  Int
+  totalCents      Int
+  confidence      Decimal         @db.Decimal(4, 3)
+  reviewRequired  Boolean         @default(false)
+  notes           String?
+  version         ProposalVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  pricingItem     PricingItem     @relation(fields: [pricingItemId], references: [id])
+
+  @@index([versionId])
+  @@index([sku])
+}
+
+model GuardrailIssue {
+  id        String            @id @default(cuid())
+  versionId String
+  severity  GuardrailSeverity
+  code      String
+  message   String
+  metadata  Json?
+  createdAt DateTime          @default(now())
+  version   ProposalVersion   @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@index([severity])
+}
+
+model ProposalReview {
+  id              String          @id @default(cuid())
+  proposalId      String
+  versionId       String
+  channel         String          @default("slack")
+  status          ReviewStatus    @default(REQUESTED)
+  slackChannelId  String?
+  slackMessageTs  String?
+  slackThreadTs   String?
+  requestedAt     DateTime        @default(now())
+  decidedAt       DateTime?
+  decidedBy       String?
+  proposal        Proposal        @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  version         ProposalVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  revisions       RevisionRequest[]
+
+  @@index([proposalId])
+  @@index([versionId])
+  @@index([slackChannelId, slackThreadTs])
+}
+
+model RevisionRequest {
+  id           String         @id @default(cuid())
+  proposalId   String
+  reviewId     String?
+  instructions String
+  source       String         @default("slack-thread")
+  slackUserId  String?
+  status       RevisionStatus @default(RECEIVED)
+  error        String?
+  createdAt    DateTime       @default(now())
+  proposal     Proposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  review       ProposalReview? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+
+  @@index([proposalId])
+}
+
+model DeliveryLog {
+  id                String         @id @default(cuid())
+  proposalId        String
+  provider          String
+  channel           String
+  recipient         String
+  subject           String?
+  status            DeliveryStatus @default(PENDING)
+  providerMessageId String?
+  error             String?
+  payload           Json?
+  createdAt         DateTime       @default(now())
+  proposal          Proposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([status])
+}
+
+model IntegrationEvent {
+  id         String   @id @default(cuid())
+  provider   String
+  eventType  String
+  externalId String?
+  payload    Json
+  status     String
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([provider, eventType])
+}
