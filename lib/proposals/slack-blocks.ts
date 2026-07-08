@@ -9,7 +9,10 @@ function formatCents(cents: number): string {
 }
 
 function escapeSlackText(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
 }
 
 function issueLabel(issue: GuardrailIssueDraft): string {
@@ -35,18 +38,26 @@ export function buildProposalReviewBlocks(input: {
   totalCents: number
   issues: GuardrailIssueDraft[]
 }): unknown[] {
-  const issueLines = input.issues.map(issueLabel)
+  const blockingIssueLines = input.issues
+    .filter((issue) => issue.severity === "BLOCKING")
+    .map(issueLabel)
 
   return [
     {
       type: "section",
       fields: [
         { type: "mrkdwn", text: `*Lead:*\n${escapeSlackText(input.leadName)}` },
-        { type: "mrkdwn", text: `*Project:*\n${escapeSlackText(input.projectType)}` },
+        {
+          type: "mrkdwn",
+          text: `*Project:*\n${escapeSlackText(input.projectType)}`,
+        },
         { type: "mrkdwn", text: `*Proposal ID:*\n\`${input.proposalId}\`` },
         { type: "mrkdwn", text: `*Version ID:*\n\`${input.versionId}\`` },
         { type: "mrkdwn", text: `*Total:*\n${formatCents(input.totalCents)}` },
-        { type: "mrkdwn", text: `*Guardrail issues:*\n${issueLines.length}` },
+        {
+          type: "mrkdwn",
+          text: `*Blocking issues:*\n${blockingIssueLines.length}`,
+        },
       ],
     },
     {
@@ -61,9 +72,9 @@ export function buildProposalReviewBlocks(input: {
       text: {
         type: "mrkdwn",
         text:
-          issueLines.length > 0
-            ? `*Guardrail details*\n${issueLines.slice(0, 10).join("\n")}`
-            : "*Guardrail details*\nNo guardrail issues found.",
+          blockingIssueLines.length > 0
+            ? `*Blocking details*\n${blockingIssueLines.slice(0, 10).join("\n")}`
+            : "*Blocking details*\nNo blocking issues found.",
       },
     },
   ]

@@ -17,6 +17,22 @@ const labelClassName = "text-sm font-medium text-foreground"
 const helpClassName = "mt-1 text-xs text-muted-foreground"
 const errorClassName = "mt-1 text-sm text-destructive"
 
+const prefillDemoIntake = process.env.NEXT_PUBLIC_PREFILL_DEMO_INTAKE === "true"
+
+const demoIntakeDefaults = prefillDemoIntake
+  ? {
+      name: "Julio Martinez",
+      email: "julio.martinez@example.com",
+      phone: "602-555-0148",
+      address: "4128 E Camelback Rd, Phoenix, AZ 85018",
+      projectType: "Outdoor kitchen",
+      budgetMin: "45000",
+      budgetMax: "75000",
+      notes:
+        "Client wants a premium outdoor kitchen with built-in grill, paver patio expansion, seating wall, lighting, and dog-friendly artificial turf around the entertaining area. Existing patio is cracked and should be demolished. HOA packet likely required. Customer cares most about durability, drainage, and a polished finished look for hosting.",
+    }
+  : null
+
 type FieldErrorProps = {
   errors?: string[]
 }
@@ -83,6 +99,7 @@ export function IntakeForm() {
             name="name"
             autoComplete="name"
             required
+            defaultValue={demoIntakeDefaults?.name ?? ""}
             aria-describedby="name-error"
           />
           <div id="name-error">
@@ -101,6 +118,7 @@ export function IntakeForm() {
             type="email"
             autoComplete="email"
             required
+            defaultValue={demoIntakeDefaults?.email ?? ""}
             aria-describedby="email-error"
           />
           <div id="email-error">
@@ -118,6 +136,7 @@ export function IntakeForm() {
             name="phone"
             type="tel"
             autoComplete="tel"
+            defaultValue={demoIntakeDefaults?.phone ?? ""}
             aria-describedby="phone-error"
           />
           <div id="phone-error">
@@ -134,6 +153,7 @@ export function IntakeForm() {
             id="address"
             name="address"
             autoComplete="street-address"
+            defaultValue={demoIntakeDefaults?.address ?? ""}
             aria-describedby="address-error"
           />
           <div id="address-error">
@@ -150,7 +170,7 @@ export function IntakeForm() {
             id="projectType"
             name="projectType"
             required
-            defaultValue=""
+            defaultValue={demoIntakeDefaults?.projectType ?? ""}
             aria-describedby="projectType-error"
           >
             <option value="" disabled>
@@ -191,6 +211,7 @@ export function IntakeForm() {
               step="100"
               inputMode="decimal"
               placeholder="25000"
+              defaultValue={demoIntakeDefaults?.budgetMin ?? ""}
               aria-describedby="budgetMin-help budgetMin-error"
             />
             <p className={helpClassName} id="budgetMin-help">
@@ -214,6 +235,7 @@ export function IntakeForm() {
               step="100"
               inputMode="decimal"
               placeholder="45000"
+              defaultValue={demoIntakeDefaults?.budgetMax ?? ""}
               aria-describedby="budgetMax-help budgetMax-error"
             />
             <p className={helpClassName} id="budgetMax-help">
@@ -237,6 +259,7 @@ export function IntakeForm() {
           required
           minLength={20}
           placeholder="Summarize scope, measurements, materials, drainage constraints, HOA concerns, and customer priorities."
+          defaultValue={demoIntakeDefaults?.notes ?? ""}
           aria-describedby="notes-help notes-error"
         />
         <p className={helpClassName} id="notes-help">

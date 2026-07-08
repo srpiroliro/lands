@@ -30,7 +30,7 @@ function proposalUrl(proposalId: string): string {
 }
 
 function toPricingCatalogForModel(
-  pricingItems: PricingCatalogForModel[],
+  pricingItems: PricingCatalogForModel[]
 ): PricingCatalogForModel[] {
   return pricingItems.map((item) => ({
     sku: item.sku,
@@ -43,7 +43,7 @@ function toPricingCatalogForModel(
 }
 
 export async function createProposal(
-  input: LeadIntakeInput,
+  input: LeadIntakeInput
 ): Promise<ProposalCreateResult> {
   const lead = await prisma.lead.create({
     data: {
@@ -181,27 +181,12 @@ export async function createProposal(
     })
   }
 
-  if (validation.blocked) {
-    await prisma.$transaction([
-      prisma.lead.update({
-        where: { id: lead.id },
-        data: { status: "BLOCKED" },
-      }),
-      prisma.proposal.update({
-        where: { id: proposal.id },
-        data: { status: "BLOCKED" },
-      }),
-    ])
-
-    return { proposalId: proposal.id, versionId: version.id, blocked: true }
-  }
-
   const internalUrl = proposalUrl(proposal.id)
   const summaryText = buildProposalReviewText({
     leadName: lead.name,
     projectType: lead.projectType,
     totalCents: validation.totalCents,
-    blocked: false,
+    blocked: validation.blocked,
   })
   const warnings = validation.issues
     .filter((issue) => issue.severity === "WARNING")
@@ -229,6 +214,8 @@ export async function createProposal(
     internalProposalUrl: internalUrl,
   })
 
+  const nextStatus = validation.blocked ? "BLOCKED" : "PENDING_REVIEW"
+
   await prisma.proposalReview.create({
     data: {
       proposalId: proposal.id,
@@ -244,11 +231,11 @@ export async function createProposal(
   await prisma.$transaction([
     prisma.lead.update({
       where: { id: lead.id },
-      data: { status: "PENDING_REVIEW" },
+      data: { status: nextStatus },
     }),
     prisma.proposal.update({
       where: { id: proposal.id },
-      data: { status: "PENDING_REVIEW" },
+      data: { status: nextStatus },
     }),
   ])
 

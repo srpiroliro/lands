@@ -2,7 +2,10 @@ import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/db"
 import { validateProposalDraft } from "@/lib/domain/guardrails"
-import type { PricingCatalogForModel } from "@/lib/domain/types"
+import type {
+  GuardrailIssueDraft,
+  PricingCatalogForModel,
+} from "@/lib/domain/types"
 import { env } from "@/lib/env"
 import { proposalAi } from "@/lib/proposal"
 import { proposalDraftSchema } from "@/lib/proposals/schema"
@@ -57,35 +60,81 @@ function warningsFromIssues(
     .map((issue) => `${issue.code}: ${issue.message}`)
 }
 
-export async function reviseProposalFromSlackThread(input: {
-  slackChannelId: string
-  slackThreadTs: string
-  slackUserId?: string
-  instructions: string
-}): Promise<void> {
-  const activeReview = await prisma.proposalReview.findFirst({
-    where: {
-      slackChannelId: input.slackChannelId,
+async function requestReviewForVersion(input: {
+  proposalId: string
+  versionId: string
+  leadName: string
+  projectType: string
+  totalCents: number
+  blocked: boolean
+  issues: GuardrailIssueDraft[]
+  slackThreadTs?: string
+}) {
+  const internalUrl = proposalUrl(input.proposalId)
+  const summaryText = buildProposalReviewText({
+    leadName: input.leadName,
+    projectType: input.projectType,
+    totalCents: input.totalCents,
+    blocked: input.blocked,
+  })
+  const request = {
+    proposalId: input.proposalId,
+    versionId: input.versionId,
+    summaryText,
+    blocks: buildProposalReviewBlocks({
+      proposalId: input.proposalId,
+      versionId: input.versionId,
+      internalUrl,
+      leadName: input.leadName,
+      projectType: input.projectType,
+      totalCents: input.totalCents,
+      issues: input.issues,
+    }),
+    totalCents: input.totalCents,
+    warnings: warningsFromIssues(input.issues),
+    blockers: blockersFromIssues(input.issues),
+    internalProposalUrl: internalUrl,
+  }
+
+  if (input.slackThreadTs) {
+    return review.postRevisionUpdate({
+      ...request,
       slackThreadTs: input.slackThreadTs,
-      status: "REQUESTED",
-    },
-    include: {
-      proposal: { include: { lead: true } },
-      version: true,
-    },
-    orderBy: { requestedAt: "desc" },
+    })
+  }
+
+  return review.requestReview(request)
+}
+
+export async function reviseProposalFromFeedback(input: {
+  proposalId: string
+  instructions: string
+  source: string
+  actorId?: string
+  reviewId?: string | null
+  slackChannelId?: string
+  slackThreadTs?: string
+}): Promise<void> {
+  const proposalForRevision = await prisma.proposal.findUnique({
+    where: { id: input.proposalId },
+    include: { lead: true },
   })
 
-  if (!activeReview) {
+  if (!proposalForRevision) {
+    return
+  }
+
+  if (!proposalForRevision.currentVersionId) {
     return
   }
 
   const revision = await prisma.revisionRequest.create({
     data: {
-      proposalId: activeReview.proposalId,
-      reviewId: activeReview.id,
+      proposalId: proposalForRevision.id,
+      reviewId: input.reviewId ?? null,
       instructions: input.instructions,
-      slackUserId: input.slackUserId,
+      source: input.source,
+      slackUserId: input.source === "slack-thread" ? input.actorId : undefined,
       status: "PROCESSING",
     },
   })
@@ -93,32 +142,28 @@ export async function reviseProposalFromSlackThread(input: {
   try {
     await prisma.$transaction([
       prisma.proposal.update({
-        where: { id: activeReview.proposalId },
+        where: { id: proposalForRevision.id },
         data: { status: "REVISING" },
       }),
       prisma.lead.update({
-        where: { id: activeReview.proposal.leadId },
+        where: { id: proposalForRevision.leadId },
         data: { status: "REVISING" },
       }),
     ])
 
     const [proposal, photos, pricingItems] = await Promise.all([
       prisma.proposal.findUnique({
-        where: { id: activeReview.proposalId },
+        where: { id: proposalForRevision.id },
         include: {
           lead: true,
           versions: {
-            where: {
-              id:
-                activeReview.proposal.currentVersionId ??
-                activeReview.versionId,
-            },
+            where: { id: proposalForRevision.currentVersionId },
             take: 1,
           },
         },
       }),
       prisma.photo.findMany({
-        where: { leadId: activeReview.proposal.leadId },
+        where: { leadId: proposalForRevision.leadId },
         orderBy: { createdAt: "asc" },
       }),
       prisma.pricingItem.findMany({
@@ -222,95 +267,56 @@ export async function reviseProposalFromSlackThread(input: {
       })
     }
 
-    await prisma.proposal.update({
-      where: { id: proposal.id },
-      data: {
-        currentVersionId: version.id,
-        totalCents: validation.totalCents,
-        confidence: draft.confidence,
-      },
-    })
-
-    await prisma.proposalReview.update({
-      where: { id: activeReview.id },
-      data: { status: "SUPERSEDED", decidedAt: new Date() },
-    })
-
-    if (validation.blocked) {
-      await prisma.$transaction([
-        prisma.proposal.update({
-          where: { id: proposal.id },
-          data: { status: "BLOCKED" },
-        }),
-        prisma.lead.update({
-          where: { id: proposal.leadId },
-          data: { status: "BLOCKED" },
-        }),
-      ])
-
-      const blockers = blockersFromIssues(validation.issues)
-      await review.postThreadMessage({
-        slackChannelId: input.slackChannelId,
-        slackThreadTs: input.slackThreadTs,
-        text:
-          `I revised the proposal, but guardrails blocked it from review. ` +
-          `Blockers: ${blockers.length > 0 ? blockers.join("; ") : "unknown guardrail failure"}.`,
+    if (input.reviewId) {
+      await prisma.proposalReview.update({
+        where: { id: input.reviewId },
+        data: { status: "SUPERSEDED", decidedAt: new Date() },
       })
-    } else {
-      const internalUrl = proposalUrl(proposal.id)
-      const summaryText = buildProposalReviewText({
-        leadName: proposal.lead.name,
-        projectType: proposal.lead.projectType,
-        totalCents: validation.totalCents,
-        blocked: false,
-      })
-      const reviewThread = await review.postRevisionUpdate({
-        proposalId: proposal.id,
-        versionId: version.id,
-        summaryText,
-        blocks: buildProposalReviewBlocks({
-          proposalId: proposal.id,
-          versionId: version.id,
-          internalUrl,
-          leadName: proposal.lead.name,
-          projectType: proposal.lead.projectType,
-          totalCents: validation.totalCents,
-          issues: validation.issues,
-        }),
-        totalCents: validation.totalCents,
-        warnings: warningsFromIssues(validation.issues),
-        blockers: blockersFromIssues(validation.issues),
-        internalProposalUrl: internalUrl,
-        slackThreadTs: input.slackThreadTs,
-      })
-
-      await prisma.$transaction([
-        prisma.proposalReview.create({
-          data: {
-            proposalId: proposal.id,
-            versionId: version.id,
-            channel: reviewThread.channel,
-            status: "REQUESTED",
-            slackChannelId: reviewThread.slackChannelId,
-            slackMessageTs: reviewThread.slackMessageTs,
-            slackThreadTs: reviewThread.slackThreadTs,
-          },
-        }),
-        prisma.proposal.update({
-          where: { id: proposal.id },
-          data: { status: "PENDING_REVIEW" },
-        }),
-        prisma.lead.update({
-          where: { id: proposal.leadId },
-          data: { status: "PENDING_REVIEW" },
-        }),
-      ])
     }
 
-    await prisma.revisionRequest.update({
-      where: { id: revision.id },
-      data: { status: "APPLIED" },
+    const reviewThread = await requestReviewForVersion({
+      proposalId: proposal.id,
+      versionId: version.id,
+      leadName: proposal.lead.name,
+      projectType: proposal.lead.projectType,
+      totalCents: validation.totalCents,
+      blocked: validation.blocked,
+      issues: validation.issues,
+      slackThreadTs: input.slackThreadTs,
     })
+
+    const nextStatus = validation.blocked ? "BLOCKED" : "PENDING_REVIEW"
+
+    await prisma.$transaction([
+      prisma.proposalReview.create({
+        data: {
+          proposalId: proposal.id,
+          versionId: version.id,
+          channel: reviewThread.channel,
+          status: "REQUESTED",
+          slackChannelId: reviewThread.slackChannelId,
+          slackMessageTs: reviewThread.slackMessageTs,
+          slackThreadTs: reviewThread.slackThreadTs,
+        },
+      }),
+      prisma.proposal.update({
+        where: { id: proposal.id },
+        data: {
+          currentVersionId: version.id,
+          totalCents: validation.totalCents,
+          confidence: draft.confidence,
+          status: nextStatus,
+        },
+      }),
+      prisma.lead.update({
+        where: { id: proposal.leadId },
+        data: { status: nextStatus },
+      }),
+      prisma.revisionRequest.update({
+        where: { id: revision.id },
+        data: { status: "APPLIED" },
+      }),
+    ])
   } catch (error) {
     const message = conciseError(error)
 
@@ -319,10 +325,44 @@ export async function reviseProposalFromSlackThread(input: {
       data: { status: "FAILED", error: message },
     })
 
-    await review.postThreadMessage({
+    if (input.slackChannelId && input.slackThreadTs) {
+      await review.postThreadMessage({
+        slackChannelId: input.slackChannelId,
+        slackThreadTs: input.slackThreadTs,
+        text: `I could not revise this proposal: ${message}`,
+      })
+    }
+
+    throw new Error(message)
+  }
+}
+
+export async function reviseProposalFromSlackThread(input: {
+  slackChannelId: string
+  slackThreadTs: string
+  slackUserId?: string
+  instructions: string
+}): Promise<void> {
+  const activeReview = await prisma.proposalReview.findFirst({
+    where: {
       slackChannelId: input.slackChannelId,
       slackThreadTs: input.slackThreadTs,
-      text: `I could not revise this proposal: ${message}`,
-    })
+      status: "REQUESTED",
+    },
+    orderBy: { requestedAt: "desc" },
+  })
+
+  if (!activeReview) {
+    return
   }
+
+  await reviseProposalFromFeedback({
+    proposalId: activeReview.proposalId,
+    reviewId: activeReview.id,
+    instructions: input.instructions,
+    source: "slack-thread",
+    actorId: input.slackUserId,
+    slackChannelId: input.slackChannelId,
+    slackThreadTs: input.slackThreadTs,
+  })
 }

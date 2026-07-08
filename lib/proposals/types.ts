@@ -16,7 +16,6 @@ export type ProposalDraft = {
   unknowns: string[]
   renderBrief: string | null
   confidence: number
-  modelTotalCents: MoneyCents
 }
 
 export type ProposalCreateResult = {

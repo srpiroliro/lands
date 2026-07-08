@@ -23,5 +23,4 @@ export const proposalDraftSchema = z.object({
   unknowns: z.array(z.string()),
   renderBrief: z.string().nullable(),
   confidence: z.number().min(0).max(1),
-  modelTotalCents: z.number().int().nonnegative(),
 })

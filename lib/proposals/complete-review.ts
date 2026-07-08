@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db"
 import { delivery } from "@/lib/delivery"
 import { env } from "@/lib/env"
 import { renderApprovedProposalDelivery } from "@/lib/proposals/render-delivery"
+import { review as reviewPlugin } from "@/lib/review"
 
 function toJsonPayload(input: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(input)) as Prisma.InputJsonValue
@@ -16,6 +17,28 @@ function selectedDeliveryProvider(): "resend" | "sendgrid" {
 
 function publicProposalUrl(publicToken: string): string {
   return `${env.APP_BASE_URL}/p/${publicToken}`
+}
+
+function slackActor(userId: string | undefined): string {
+  return userId ? `<@${userId}>` : "Someone"
+}
+
+async function postDecisionThreadMessage(input: {
+  slackChannelId: string | null
+  slackThreadTs: string | null
+  text: string
+}): Promise<void> {
+  if (!input.slackChannelId || !input.slackThreadTs) return
+
+  try {
+    await reviewPlugin.postThreadMessage({
+      slackChannelId: input.slackChannelId,
+      slackThreadTs: input.slackThreadTs,
+      text: input.text,
+    })
+  } catch (error) {
+    console.error("Slack proposal decision confirmation failed", error)
+  }
 }
 
 async function loadRequestedReview(input: {
@@ -113,6 +136,11 @@ async function approveProposalReview(input: {
       },
       error,
     })
+    await postDecisionThreadMessage({
+      slackChannelId: review.slackChannelId,
+      slackThreadTs: review.slackThreadTs,
+      text: `Approval by ${slackActor(input.decidedBy)} failed: ${error}`,
+    })
     throw new Error(error)
   }
 
@@ -125,6 +153,11 @@ async function approveProposalReview(input: {
       subject: rendered.subject,
       payload: { proposalUrl, versionId: review.versionId },
       error,
+    })
+    await postDecisionThreadMessage({
+      slackChannelId: review.slackChannelId,
+      slackThreadTs: review.slackThreadTs,
+      text: `Approval by ${slackActor(input.decidedBy)} failed: ${error}`,
     })
     throw new Error(error)
   }
@@ -187,6 +220,12 @@ async function approveProposalReview(input: {
       leadId: review.proposal.leadId,
       proposalId: review.proposalId,
     })
+
+    await postDecisionThreadMessage({
+      slackChannelId: review.slackChannelId,
+      slackThreadTs: review.slackThreadTs,
+      text: `Approved by ${slackActor(input.decidedBy)}. Proposal delivered to ${recipient}.`,
+    })
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Proposal delivery failed"
@@ -201,6 +240,11 @@ async function approveProposalReview(input: {
         error: message,
         payload: toJsonPayload({ proposalUrl, versionId: review.versionId }),
       },
+    })
+    await postDecisionThreadMessage({
+      slackChannelId: review.slackChannelId,
+      slackThreadTs: review.slackThreadTs,
+      text: `Approved by ${slackActor(input.decidedBy)}, but delivery failed: ${message}`,
     })
     throw error
   }
@@ -232,6 +276,12 @@ async function rejectProposalReview(input: {
       data: { status: "REJECTED" },
     }),
   ])
+
+  await postDecisionThreadMessage({
+    slackChannelId: review.slackChannelId,
+    slackThreadTs: review.slackThreadTs,
+    text: `Rejected by ${slackActor(input.decidedBy)}.`,
+  })
 }
 
 export async function completeProposalReview(input: {

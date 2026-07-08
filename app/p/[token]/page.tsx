@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 
 import { LineItemsTable } from "@/components/proposal/line-items-table"
 import { ProposalSummary } from "@/components/proposal/proposal-summary"
+import { PublicFeedbackForm } from "@/components/proposal/public-feedback-form"
 import {
   formatMoneyCents,
   getPublicProposalView,
@@ -92,6 +93,8 @@ export default async function PublicProposalPage({
             deposit, and any HOA or permit requirements.
           </p>
         </section>
+
+        <PublicFeedbackForm token={token} />
       </div>
     </main>
   )

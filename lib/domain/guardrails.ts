@@ -7,7 +7,6 @@ import type {
 } from "@/lib/domain/types"
 import type { ProposalDraft } from "@/lib/proposals/types"
 
-const MODEL_TOTAL_TOLERANCE_CENTS = 100
 const BUSINESS_MIN_TOTAL_CENTS = 800_000
 const BUSINESS_MAX_TOTAL_CENTS = 12_000_000
 const RENDER_REQUIRED_THRESHOLD_CENTS = 3_000_000
@@ -52,16 +51,6 @@ export function validateProposalDraft(input: {
       })
     }
 
-    if (lineItem.quantitySource === "AI_ESTIMATE") {
-      reviewReasons.push("ai_estimated_quantity")
-      issues.push({
-        severity: "WARNING",
-        code: "AI_ESTIMATED_QUANTITY",
-        message: `${lineItem.sku} quantity was estimated by AI and needs review.`,
-        metadata: { sku: lineItem.sku, quantity: lineItem.quantity },
-      })
-    }
-
     if (lineItem.confidence < MIN_LINE_CONFIDENCE) {
       reviewReasons.push("low_line_confidence")
       issues.push({
@@ -92,24 +81,6 @@ export function validateProposalDraft(input: {
     (sum, lineItem) => sum + lineItem.totalCents,
     0
   )
-  const modelTotalDeltaCents = Math.abs(
-    totalCents - input.draft.modelTotalCents
-  )
-
-  if (modelTotalDeltaCents > MODEL_TOTAL_TOLERANCE_CENTS) {
-    issues.push({
-      severity: "BLOCKING",
-      code: "MODEL_TOTAL_MISMATCH",
-      message:
-        "Model total differs from catalog-recomputed total by more than $1.",
-      metadata: {
-        modelTotalCents: input.draft.modelTotalCents,
-        recomputedTotalCents: totalCents,
-        deltaCents: modelTotalDeltaCents,
-      },
-    })
-  }
-
   if (totalCents < BUSINESS_MIN_TOTAL_CENTS) {
     issues.push({
       severity: "BLOCKING",

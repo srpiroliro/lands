@@ -18,7 +18,6 @@ const proposalDraftJsonSchema = {
     "unknowns",
     "renderBrief",
     "confidence",
-    "modelTotalCents",
   ],
   properties: {
     executiveSummary: { type: "string", minLength: 20 },
@@ -46,7 +45,6 @@ const proposalDraftJsonSchema = {
     unknowns: { type: "array", items: { type: "string" } },
     renderBrief: { type: ["string", "null"] },
     confidence: { type: "number", minimum: 0, maximum: 1 },
-    modelTotalCents: { type: "integer", minimum: 0 },
   },
 } as const
 
@@ -54,8 +52,9 @@ const systemPrompt = `You draft proposals for Greenscape Pro, a premium Phoenix 
 Use only provided pricing SKUs. Do not invent SKUs.
 If notes provide measurements, use those measurements and mark quantitySource USER.
 If photos imply scope but measurements are missing, estimate conservatively, mark quantitySource AI_ESTIMATE, reduce confidence, and explain in notes.
-modelTotalCents must equal the sum of unit price times quantity for all selected line items.
-If total exceeds $30,000, include a concise renderBrief for Carlos.
+The quantity field is only the measurement or count amount for the selected catalog item unit: sf means square feet, lf means linear feet, and ea means each/count. For example, 500 sf of pavers returns quantity 500, 20 lf of outdoor kitchen returns quantity 20, and 1 grill insert returns quantity 1.
+Do not calculate proposal totals, line-item prices, or price-derived quantities. Return only SKUs, measurement/count quantities, quantity sources, confidence, notes, assumptions, unknowns, and narrative fields. Pricing is calculated later by the app from the catalog.
+If the likely project scope is large enough to require design review, include a concise renderBrief for Carlos.
 Return only schema-valid JSON.`
 
 type OpenRouterContentPart =
@@ -82,7 +81,7 @@ function buildPrompt(input: ProposalAiDraftInput): string {
       pricingCatalog: input.pricingCatalog,
     },
     null,
-    2,
+    2
   )
 }
 
@@ -95,49 +94,63 @@ function buildRevisionPrompt(input: ProposalAiRevisionInput): string {
       revisionInstructions: input.revisionInstructions,
     },
     null,
-    2,
+    2
   )
 }
 
-function buildMessages(prompt: string, photoUrls: string[]): OpenRouterMessage[] {
+function buildMessages(
+  prompt: string,
+  photoUrls: string[]
+): OpenRouterMessage[] {
   return [
     { role: "system", content: systemPrompt },
     {
       role: "user",
       content: [
         { type: "text", text: prompt },
-        ...photoUrls.map((url) => ({ type: "image_url" as const, image_url: { url } })),
+        ...photoUrls.map((url) => ({
+          type: "image_url" as const,
+          image_url: { url },
+        })),
       ],
     },
   ]
 }
 
-async function requestProposalDraft(model: string, messages: OpenRouterMessage[]): Promise<ProposalDraft> {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": env.OPENROUTER_SITE_URL,
-      "X-Title": env.OPENROUTER_APP_NAME,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "proposal_draft",
-          strict: true,
-          schema: proposalDraftJsonSchema,
-        },
+async function requestProposalDraft(
+  model: string,
+  messages: OpenRouterMessage[]
+): Promise<ProposalDraft> {
+  const response = await fetch(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": env.OPENROUTER_SITE_URL,
+        "X-Title": env.OPENROUTER_APP_NAME,
       },
-    }),
-  })
+      body: JSON.stringify({
+        model,
+        messages,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "proposal_draft",
+            strict: true,
+            schema: proposalDraftJsonSchema,
+          },
+        },
+      }),
+    }
+  )
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "")
-    throw new Error(`OpenRouter request failed (${response.status}): ${errorText || response.statusText}`)
+    throw new Error(
+      `OpenRouter request failed (${response.status}): ${errorText || response.statusText}`
+    )
   }
 
   const payload = (await response.json()) as OpenRouterResponse
@@ -150,7 +163,9 @@ async function requestProposalDraft(model: string, messages: OpenRouterMessage[]
   return proposalDraftSchema.parse(JSON.parse(content))
 }
 
-async function requestWithFallback(messages: OpenRouterMessage[]): Promise<ProposalDraft> {
+async function requestWithFallback(
+  messages: OpenRouterMessage[]
+): Promise<ProposalDraft> {
   const models = [env.OPENROUTER_MODEL, env.OPENROUTER_FALLBACK_MODEL]
   let lastError: unknown
 
@@ -162,15 +177,21 @@ async function requestWithFallback(messages: OpenRouterMessage[]): Promise<Propo
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error("OpenRouter proposal draft failed")
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("OpenRouter proposal draft failed")
 }
 
 export const openRouterProposalAiPlugin: ProposalAiPlugin = {
   draftProposal(input) {
-    return requestWithFallback(buildMessages(buildPrompt(input), input.photoUrls))
+    return requestWithFallback(
+      buildMessages(buildPrompt(input), input.photoUrls)
+    )
   },
 
   reviseProposal(input) {
-    return requestWithFallback(buildMessages(buildRevisionPrompt(input), input.photoUrls))
+    return requestWithFallback(
+      buildMessages(buildRevisionPrompt(input), input.photoUrls)
+    )
   },
 }

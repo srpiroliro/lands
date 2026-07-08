@@ -3,6 +3,7 @@ import { z } from "zod"
 const envSchema = z.object({
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   DEMO_SEED_SECRET: z.string().optional(),
+  NEXT_PUBLIC_PREFILL_DEMO_INTAKE: z.enum(["true", "false"]).default("false"),
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
   BLOB_READ_WRITE_TOKEN: z.string().min(1),
