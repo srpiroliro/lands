@@ -213,11 +213,18 @@ export async function reviseProposalFromFeedback(input: {
       revisionInstructions: input.instructions,
     })
     const draft = proposalDraftSchema.parse(rawDraft)
+    const measurementAudit = await proposalAi.auditMeasurements({
+      lead: leadForAi,
+      photoUrls: photos.map((photo) => photo.url),
+      pricingCatalog: toPricingCatalogForModel(pricingItems),
+      draft,
+    })
     const validation = validateProposalDraft({
       pricingItems,
       budgetMinCents: proposal.lead.budgetMinCents,
       budgetMaxCents: proposal.lead.budgetMaxCents,
       draft,
+      measurementAudit,
     })
 
     const version = await prisma.proposalVersion.create({
@@ -231,7 +238,10 @@ export async function reviseProposalFromFeedback(input: {
         renderBrief: draft.renderBrief,
         totalCents: validation.totalCents,
         confidence: draft.confidence,
-        rawModelJson: toJsonValue(draft),
+        rawModelJson: toJsonValue({
+          ...draft,
+          measurementAudit,
+        }),
       },
     })
 

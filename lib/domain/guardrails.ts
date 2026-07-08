@@ -5,7 +5,10 @@ import type {
   ValidatedLineItem,
   ValidationResult,
 } from "@/lib/domain/types"
-import type { ProposalDraft } from "@/lib/proposals/types"
+import type {
+  MeasurementAuditResult,
+  ProposalDraft,
+} from "@/lib/proposals/types"
 
 const BUSINESS_MIN_TOTAL_CENTS = 800_000
 const BUSINESS_MAX_TOTAL_CENTS = 12_000_000
@@ -18,6 +21,7 @@ export function validateProposalDraft(input: {
   budgetMinCents?: number | null
   budgetMaxCents?: number | null
   draft: ProposalDraft
+  measurementAudit?: MeasurementAuditResult | null
 }): ValidationResult {
   const pricingBySku = indexPricingItems(input.pricingItems)
   const issues: GuardrailIssueDraft[] = []
@@ -156,6 +160,22 @@ export function validateProposalDraft(input: {
       metadata: {
         totalCents,
         thresholdCents: RENDER_REQUIRED_THRESHOLD_CENTS,
+      },
+    })
+  }
+
+  for (const auditIssue of input.measurementAudit?.issues ?? []) {
+    issues.push({
+      severity: auditIssue.severity,
+      code: auditIssue.code,
+      message: auditIssue.message,
+      metadata: {
+        sku: auditIssue.sku,
+        modelSuggestedQuantity: auditIssue.modelSuggestedQuantity,
+        confidence: auditIssue.confidence,
+        reason: auditIssue.reason,
+        auditSummary: input.measurementAudit?.summary,
+        auditOverallRisk: input.measurementAudit?.overallRisk,
       },
     })
   }

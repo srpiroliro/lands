@@ -18,6 +18,26 @@ export type ProposalDraft = {
   confidence: number
 }
 
+export type MeasurementAuditIssue = {
+  sku: string
+  severity: "WARNING" | "BLOCKING"
+  code:
+    | "MEASUREMENT_NEEDS_CONFIRMATION"
+    | "NO_SCALE_REFERENCE"
+    | "MEASUREMENT_DISAGREEMENT"
+    | "UNIT_MISMATCH_RISK"
+  message: string
+  modelSuggestedQuantity: number | null
+  confidence: number
+  reason: string
+}
+
+export type MeasurementAuditResult = {
+  issues: MeasurementAuditIssue[]
+  overallRisk: "LOW" | "MEDIUM" | "HIGH"
+  summary: string
+}
+
 export type ProposalCreateResult = {
   proposalId: string
   versionId: string

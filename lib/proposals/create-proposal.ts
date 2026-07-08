@@ -111,11 +111,18 @@ export async function createProposal(
     pricingCatalog: toPricingCatalogForModel(pricingItems),
   })
   const draft = proposalDraftSchema.parse(rawDraft)
+  const measurementAudit = await proposalAi.auditMeasurements({
+    lead: leadForAi,
+    photoUrls: storedPhotos.map((photo) => photo.url),
+    pricingCatalog: toPricingCatalogForModel(pricingItems),
+    draft,
+  })
   const validation = validateProposalDraft({
     pricingItems,
     budgetMinCents: input.budgetMinCents,
     budgetMaxCents: input.budgetMaxCents,
     draft,
+    measurementAudit,
   })
 
   const publicToken = crypto.randomBytes(24).toString("hex")
@@ -140,7 +147,10 @@ export async function createProposal(
       renderBrief: draft.renderBrief,
       totalCents: validation.totalCents,
       confidence: draft.confidence,
-      rawModelJson: toJsonValue(draft),
+      rawModelJson: toJsonValue({
+        ...draft,
+        measurementAudit,
+      }),
     },
   })
 

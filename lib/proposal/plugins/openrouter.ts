@@ -1,11 +1,18 @@
 import { env } from "@/lib/env"
 import type {
+  MeasurementAuditInput,
   ProposalAiDraftInput,
   ProposalAiPlugin,
   ProposalAiRevisionInput,
 } from "@/lib/proposal/types"
-import { proposalDraftSchema } from "@/lib/proposals/schema"
-import type { ProposalDraft } from "@/lib/proposals/types"
+import {
+  measurementAuditResultSchema,
+  proposalDraftSchema,
+} from "@/lib/proposals/schema"
+import type {
+  MeasurementAuditResult,
+  ProposalDraft,
+} from "@/lib/proposals/types"
 
 const proposalDraftJsonSchema = {
   type: "object",
@@ -48,6 +55,51 @@ const proposalDraftJsonSchema = {
   },
 } as const
 
+const measurementAuditJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["issues", "overallRisk", "summary"],
+  properties: {
+    issues: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "sku",
+          "severity",
+          "code",
+          "message",
+          "modelSuggestedQuantity",
+          "confidence",
+          "reason",
+        ],
+        properties: {
+          sku: { type: "string", minLength: 1 },
+          severity: { type: "string", enum: ["WARNING", "BLOCKING"] },
+          code: {
+            type: "string",
+            enum: [
+              "MEASUREMENT_NEEDS_CONFIRMATION",
+              "NO_SCALE_REFERENCE",
+              "MEASUREMENT_DISAGREEMENT",
+              "UNIT_MISMATCH_RISK",
+            ],
+          },
+          message: { type: "string", minLength: 1 },
+          modelSuggestedQuantity: {
+            anyOf: [{ type: "number", exclusiveMinimum: 0 }, { type: "null" }],
+          },
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+          reason: { type: "string", minLength: 1 },
+        },
+      },
+    },
+    overallRisk: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
+    summary: { type: "string", minLength: 1 },
+  },
+} as const
+
 const systemPrompt = `You draft proposals for Greenscape Pro, a premium Phoenix residential hardscape/landscape design-build company.
 Use only provided pricing SKUs. Do not invent SKUs.
 If notes provide measurements, use those measurements and mark quantitySource USER.
@@ -56,6 +108,8 @@ The quantity field is only the measurement or count amount for the selected cata
 Do not calculate proposal totals, line-item prices, or price-derived quantities. Return only SKUs, measurement/count quantities, quantity sources, confidence, notes, assumptions, unknowns, and narrative fields. Pricing is calculated later by the app from the catalog.
 If the likely project scope is large enough to require design review, include a concise renderBrief for Carlos.
 Return only schema-valid JSON.`
+
+const measurementAuditSystemPrompt = `You are a construction measurement QA auditor for Greenscape Pro. Your job is to find risky measurement quantities in a proposal draft. Do not calculate prices or totals. Review only whether the quantity amount for each SKU is supported by notes/photos and matches the catalog unit. sf means square feet, lf means linear feet, ea means each/count. Photo-only sf/lf estimates without a scale reference should be flagged as BLOCKING NO_SCALE_REFERENCE or MEASUREMENT_NEEDS_CONFIRMATION. If the draft quantity appears inconsistent with visible evidence or notes, flag MEASUREMENT_DISAGREEMENT. If an item uses the wrong kind of unit, flag UNIT_MISMATCH_RISK. Return only schema-valid JSON.`
 
 type OpenRouterContentPart =
   | { type: "text"; text: string }
@@ -98,12 +152,33 @@ function buildRevisionPrompt(input: ProposalAiRevisionInput): string {
   )
 }
 
+function buildMeasurementAuditPrompt(input: MeasurementAuditInput): string {
+  return JSON.stringify(
+    {
+      lead: input.lead,
+      pricingCatalog: input.pricingCatalog.map((item) => ({
+        sku: item.sku,
+        category: item.category,
+        name: item.name,
+        description: item.description,
+        unit: item.unit,
+      })),
+      draftLineItems: input.draft.lineItems,
+      assumptions: input.draft.assumptions,
+      unknowns: input.draft.unknowns,
+    },
+    null,
+    2
+  )
+}
+
 function buildMessages(
   prompt: string,
-  photoUrls: string[]
+  photoUrls: string[],
+  promptOverride = systemPrompt
 ): OpenRouterMessage[] {
   return [
-    { role: "system", content: systemPrompt },
+    { role: "system", content: promptOverride },
     {
       role: "user",
       content: [
@@ -163,6 +238,52 @@ async function requestProposalDraft(
   return proposalDraftSchema.parse(JSON.parse(content))
 }
 
+async function requestMeasurementAudit(
+  model: string,
+  messages: OpenRouterMessage[]
+): Promise<MeasurementAuditResult> {
+  const response = await fetch(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": env.OPENROUTER_SITE_URL,
+        "X-Title": env.OPENROUTER_APP_NAME,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "measurement_audit",
+            strict: true,
+            schema: measurementAuditJsonSchema,
+          },
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "")
+    throw new Error(
+      `OpenRouter request failed (${response.status}): ${errorText || response.statusText}`
+    )
+  }
+
+  const payload = (await response.json()) as OpenRouterResponse
+  const content = payload.choices?.[0]?.message?.content
+
+  if (!content) {
+    throw new Error("OpenRouter returned an empty measurement audit")
+  }
+
+  return measurementAuditResultSchema.parse(JSON.parse(content))
+}
+
 async function requestWithFallback(
   messages: OpenRouterMessage[]
 ): Promise<ProposalDraft> {
@@ -182,6 +303,25 @@ async function requestWithFallback(
     : new Error("OpenRouter proposal draft failed")
 }
 
+async function requestMeasurementAuditWithFallback(
+  messages: OpenRouterMessage[]
+): Promise<MeasurementAuditResult> {
+  const models = [env.OPENROUTER_MODEL, env.OPENROUTER_FALLBACK_MODEL]
+  let lastError: unknown
+
+  for (const model of models) {
+    try {
+      return await requestMeasurementAudit(model, messages)
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("OpenRouter measurement audit failed")
+}
+
 export const openRouterProposalAiPlugin: ProposalAiPlugin = {
   draftProposal(input) {
     return requestWithFallback(
@@ -192,6 +332,16 @@ export const openRouterProposalAiPlugin: ProposalAiPlugin = {
   reviseProposal(input) {
     return requestWithFallback(
       buildMessages(buildRevisionPrompt(input), input.photoUrls)
+    )
+  },
+
+  auditMeasurements(input) {
+    return requestMeasurementAuditWithFallback(
+      buildMessages(
+        buildMeasurementAuditPrompt(input),
+        input.photoUrls,
+        measurementAuditSystemPrompt
+      )
     )
   },
 }

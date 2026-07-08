@@ -24,3 +24,24 @@ export const proposalDraftSchema = z.object({
   renderBrief: z.string().nullable(),
   confidence: z.number().min(0).max(1),
 })
+
+export const measurementAuditIssueSchema = z.object({
+  sku: z.string().min(1),
+  severity: z.enum(["WARNING", "BLOCKING"]),
+  code: z.enum([
+    "MEASUREMENT_NEEDS_CONFIRMATION",
+    "NO_SCALE_REFERENCE",
+    "MEASUREMENT_DISAGREEMENT",
+    "UNIT_MISMATCH_RISK",
+  ]),
+  message: z.string().min(1),
+  modelSuggestedQuantity: z.number().positive().nullable(),
+  confidence: z.number().min(0).max(1),
+  reason: z.string().min(1),
+})
+
+export const measurementAuditResultSchema = z.object({
+  issues: z.array(measurementAuditIssueSchema),
+  overallRisk: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  summary: z.string().min(1),
+})
