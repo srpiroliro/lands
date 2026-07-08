@@ -1,0 +1,198 @@
+import { indexPricingItems } from "@/lib/domain/pricing"
+import type {
+  GuardrailIssueDraft,
+  PricingCatalogItem,
+  ValidatedLineItem,
+  ValidationResult,
+} from "@/lib/domain/types"
+import type { ProposalDraft } from "@/lib/proposals/types"
+
+const MODEL_TOTAL_TOLERANCE_CENTS = 100
+const BUSINESS_MIN_TOTAL_CENTS = 800_000
+const BUSINESS_MAX_TOTAL_CENTS = 12_000_000
+const RENDER_REQUIRED_THRESHOLD_CENTS = 3_000_000
+const MIN_DRAFT_CONFIDENCE = 0.7
+const MIN_LINE_CONFIDENCE = 0.7
+
+export function validateProposalDraft(input: {
+  pricingItems: PricingCatalogItem[]
+  budgetMinCents?: number | null
+  budgetMaxCents?: number | null
+  draft: ProposalDraft
+}): ValidationResult {
+  const pricingBySku = indexPricingItems(input.pricingItems)
+  const issues: GuardrailIssueDraft[] = []
+  const lineItems: ValidatedLineItem[] = []
+
+  for (const lineItem of input.draft.lineItems) {
+    const pricingItem = pricingBySku.get(lineItem.sku)
+
+    if (!pricingItem) {
+      issues.push({
+        severity: "BLOCKING",
+        code: "UNKNOWN_SKU",
+        message: `${lineItem.sku} is not an active pricing catalog SKU.`,
+        metadata: { sku: lineItem.sku },
+      })
+      continue
+    }
+
+    const totalCents = Math.round(
+      pricingItem.unitPriceCents * lineItem.quantity
+    )
+    const reviewReasons: string[] = []
+
+    if (pricingItem.requiresReview) {
+      reviewReasons.push("catalog_review_required")
+      issues.push({
+        severity: "WARNING",
+        code: "CATALOG_REVIEW_REQUIRED",
+        message: `${lineItem.sku} requires manual pricing review.`,
+        metadata: { sku: lineItem.sku },
+      })
+    }
+
+    if (lineItem.quantitySource === "AI_ESTIMATE") {
+      reviewReasons.push("ai_estimated_quantity")
+      issues.push({
+        severity: "WARNING",
+        code: "AI_ESTIMATED_QUANTITY",
+        message: `${lineItem.sku} quantity was estimated by AI and needs review.`,
+        metadata: { sku: lineItem.sku, quantity: lineItem.quantity },
+      })
+    }
+
+    if (lineItem.confidence < MIN_LINE_CONFIDENCE) {
+      reviewReasons.push("low_line_confidence")
+      issues.push({
+        severity: "WARNING",
+        code: "LOW_LINE_CONFIDENCE",
+        message: `${lineItem.sku} line item confidence is below ${MIN_LINE_CONFIDENCE}.`,
+        metadata: { sku: lineItem.sku, confidence: lineItem.confidence },
+      })
+    }
+
+    lineItems.push({
+      pricingItemId: pricingItem.id,
+      sku: pricingItem.sku,
+      name: pricingItem.name,
+      description: pricingItem.description,
+      unit: pricingItem.unit,
+      quantity: lineItem.quantity,
+      quantitySource: lineItem.quantitySource,
+      unitPriceCents: pricingItem.unitPriceCents,
+      totalCents,
+      confidence: lineItem.confidence,
+      reviewRequired: reviewReasons.length > 0,
+      notes: lineItem.notes,
+    })
+  }
+
+  const totalCents = lineItems.reduce(
+    (sum, lineItem) => sum + lineItem.totalCents,
+    0
+  )
+  const modelTotalDeltaCents = Math.abs(
+    totalCents - input.draft.modelTotalCents
+  )
+
+  if (modelTotalDeltaCents > MODEL_TOTAL_TOLERANCE_CENTS) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "MODEL_TOTAL_MISMATCH",
+      message:
+        "Model total differs from catalog-recomputed total by more than $1.",
+      metadata: {
+        modelTotalCents: input.draft.modelTotalCents,
+        recomputedTotalCents: totalCents,
+        deltaCents: modelTotalDeltaCents,
+      },
+    })
+  }
+
+  if (totalCents < BUSINESS_MIN_TOTAL_CENTS) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "TOTAL_BELOW_BUSINESS_MIN",
+      message:
+        "Proposal total is below Greenscape Pro's $8,000 minimum project range.",
+      metadata: {
+        totalCents,
+        minimumCents: BUSINESS_MIN_TOTAL_CENTS,
+      },
+    })
+  }
+
+  if (totalCents > BUSINESS_MAX_TOTAL_CENTS) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "TOTAL_ABOVE_BUSINESS_MAX",
+      message:
+        "Proposal total is above Greenscape Pro's $120,000 standard project range.",
+      metadata: {
+        totalCents,
+        maximumCents: BUSINESS_MAX_TOTAL_CENTS,
+      },
+    })
+  }
+
+  if (
+    input.budgetMinCents != null &&
+    input.budgetMinCents >= 0 &&
+    totalCents < input.budgetMinCents
+  ) {
+    issues.push({
+      severity: "WARNING",
+      code: "UNDER_BUDGET_MIN",
+      message: "Proposal total is below the customer's stated budget range.",
+      metadata: {
+        totalCents,
+        budgetMinCents: input.budgetMinCents,
+      },
+    })
+  }
+
+  if (
+    input.budgetMaxCents != null &&
+    input.budgetMaxCents >= 0 &&
+    totalCents > input.budgetMaxCents
+  ) {
+    issues.push({
+      severity: "WARNING",
+      code: "OVER_BUDGET_MAX",
+      message: "Proposal total is above the customer's stated budget range.",
+      metadata: {
+        totalCents,
+        budgetMaxCents: input.budgetMaxCents,
+      },
+    })
+  }
+
+  if (input.draft.confidence < MIN_DRAFT_CONFIDENCE) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "LOW_DRAFT_CONFIDENCE",
+      message: `Draft confidence is below ${MIN_DRAFT_CONFIDENCE}.`,
+      metadata: { confidence: input.draft.confidence },
+    })
+  }
+
+  if (totalCents > RENDER_REQUIRED_THRESHOLD_CENTS) {
+    issues.push({
+      severity: "WARNING",
+      code: "RENDER_REQUIRED",
+      message: "Projects over $30,000 require a 3D render before sending.",
+      metadata: {
+        totalCents,
+        thresholdCents: RENDER_REQUIRED_THRESHOLD_CENTS,
+      },
+    })
+  }
+
+  return {
+    blocked: issues.some((issue) => issue.severity === "BLOCKING"),
+    totalCents,
+    lineItems,
+    issues,
+  }
+}
