@@ -5,6 +5,10 @@
 ### 1. Proposal Draft Agent
 Creates the initial draft of the proposal and sends it to Marcus so that he can review and approve/deny it.
 
+#### Assumptions
+The pricing doc consists of [item name] -- [price]. But this would need proper review with the actual pricing doc.
+Even better would be to see old proposal documents, to properly understand the pricing and better steer the models.
+
 #### What it does?
  - Intakes the notes, project type, site photos, budget.
  - Generates the initial draft of the proposal based on the pricing sheet.
@@ -112,3 +116,6 @@ If only drafts are meant, then the priorities match.
 ## What is one agent you considered but did not include in your top 5, and why not?
 Lead Qualifier Agent. It would save a small amount of time per week (1-2 hrs/week). 
 My idea is that the Pricing Agent actually saves more time and money.
+
+
+## Other Agents
