@@ -1,9 +1,6 @@
 import type { PricingCatalogForModel } from "@/lib/domain/types"
 import type { LeadIntakeInput } from "@/lib/intake/types"
-import type {
-  MeasurementAuditResult,
-  ProposalDraft,
-} from "@/lib/proposals/types"
+import type { MeasurementAuditResult, ProposalDraft } from "@/lib/engine/types"
 
 export type ProposalAiDraftInput = {
   lead: Omit<LeadIntakeInput, "photos">

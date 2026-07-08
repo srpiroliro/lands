@@ -6,7 +6,7 @@ import {
   validatePhotoFiles,
 } from "@/lib/intake/schema"
 import type { IntakeActionState } from "@/lib/intake/types"
-import { createProposal } from "@/lib/proposals/create-proposal"
+import { createProposal } from "@/lib/engine/create-proposal"
 
 const initialFieldErrors: Record<string, string[]> = {}
 

@@ -8,11 +8,8 @@ import type {
 import {
   measurementAuditResultSchema,
   proposalDraftSchema,
-} from "@/lib/proposals/schema"
-import type {
-  MeasurementAuditResult,
-  ProposalDraft,
-} from "@/lib/proposals/types"
+} from "@/lib/engine/schema"
+import type { MeasurementAuditResult, ProposalDraft } from "@/lib/engine/types"
 
 const proposalDraftJsonSchema = {
   type: "object",

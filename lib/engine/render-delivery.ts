@@ -1,4 +1,4 @@
-import { formatMoneyCents } from "@/lib/proposals/render-proposal"
+import { formatMoneyCents } from "@/lib/engine/render-proposal"
 
 function escapeHtml(value: string): string {
   return value

@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/db"
 import { env } from "@/lib/env"
-import { reviseProposalFromSlackThread } from "@/lib/proposals/revise-proposal"
+import { reviseProposalFromSlackThread } from "@/lib/engine/revise-proposal"
 import { verifySlackSignature } from "@/lib/review/slack-signature"
 import type { SlackMessageEvent } from "@/lib/review/types"
 

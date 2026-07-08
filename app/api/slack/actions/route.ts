@@ -1,7 +1,7 @@
 import { after } from "next/server"
 
 import { env } from "@/lib/env"
-import { completeProposalReview } from "@/lib/proposals/complete-review"
+import { completeProposalReview } from "@/lib/engine/complete-review"
 import { parseSlackActionPayload } from "@/lib/review/schema"
 import { verifySlackSignature } from "@/lib/review/slack-signature"
 

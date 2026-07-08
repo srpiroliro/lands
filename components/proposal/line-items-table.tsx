@@ -1,5 +1,5 @@
-import type { ProposalLineItemView } from "@/lib/proposals/render-proposal"
-import { formatMoneyCents } from "@/lib/proposals/render-proposal"
+import type { ProposalLineItemView } from "@/lib/engine/render-proposal"
+import { formatMoneyCents } from "@/lib/engine/render-proposal"
 
 type LineItemsTableProps = {
   items: ProposalLineItemView[]

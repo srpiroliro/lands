@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { validateProposalDraft } from "./guardrails"
 import type { PricingCatalogItem } from "./types"
-import type { MeasurementAuditResult, ProposalDraft } from "../proposals/types"
+import type { MeasurementAuditResult, ProposalDraft } from "../engine/types"
 
 const pricingItems: PricingCatalogItem[] = [
   {

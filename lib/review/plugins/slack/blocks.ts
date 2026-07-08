@@ -1,4 +1,8 @@
 import type { GuardrailIssueDraft } from "@/lib/domain/types"
+import type {
+  ProposalReviewRequest,
+  ReviewRequestMessage,
+} from "@/lib/review/types"
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -19,7 +23,23 @@ function issueLabel(issue: GuardrailIssueDraft): string {
   return `*${issue.severity}* \`${escapeSlackText(issue.code)}\`: ${escapeSlackText(issue.message)}`
 }
 
-export function buildProposalReviewText(input: {
+function blockersFromIssues(
+  issues: Array<{ severity: string; code: string; message: string }>
+): string[] {
+  return issues
+    .filter((issue) => issue.severity === "BLOCKING")
+    .map((issue) => `${issue.code}: ${issue.message}`)
+}
+
+function warningsFromIssues(
+  issues: Array<{ severity: string; code: string; message: string }>
+): string[] {
+  return issues
+    .filter((issue) => issue.severity === "WARNING")
+    .map((issue) => `${issue.code}: ${issue.message}`)
+}
+
+function buildProposalReviewText(input: {
   leadName: string
   projectType: string
   totalCents: number
@@ -29,7 +49,7 @@ export function buildProposalReviewText(input: {
   return `Proposal ${status}: ${input.leadName} — ${input.projectType} (${formatCents(input.totalCents)})`
 }
 
-export function buildProposalReviewBlocks(input: {
+function buildProposalReviewBlocks(input: {
   proposalId: string
   versionId: string
   internalUrl: string
@@ -78,4 +98,27 @@ export function buildProposalReviewBlocks(input: {
       },
     },
   ]
+}
+
+export function buildProposalReviewMessage(
+  input: ProposalReviewRequest
+): ReviewRequestMessage {
+  return {
+    proposalId: input.proposalId,
+    versionId: input.versionId,
+    summaryText: buildProposalReviewText(input),
+    blocks: buildProposalReviewBlocks({
+      proposalId: input.proposalId,
+      versionId: input.versionId,
+      internalUrl: input.internalProposalUrl,
+      leadName: input.leadName,
+      projectType: input.projectType,
+      totalCents: input.totalCents,
+      issues: input.issues,
+    }),
+    totalCents: input.totalCents,
+    warnings: warningsFromIssues(input.issues),
+    blockers: blockersFromIssues(input.issues),
+    internalProposalUrl: input.internalProposalUrl,
+  }
 }

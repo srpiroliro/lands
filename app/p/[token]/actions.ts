@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { prisma } from "@/lib/db"
-import { reviseProposalFromFeedback } from "@/lib/proposals/revise-proposal"
+import { reviseProposalFromFeedback } from "@/lib/engine/revise-proposal"
 
 export type PublicProposalFeedbackState = {
   ok: boolean

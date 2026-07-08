@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { resolveApprovedProposalDeliveryTarget } from "@/lib/proposals/delivery-target"
+import { resolveApprovedProposalDeliveryTarget } from "@/lib/engine/delivery-target"
 
 describe("resolveApprovedProposalDeliveryTarget", () => {
   it("uses the Slack delivery channel and does not require a lead email", () => {

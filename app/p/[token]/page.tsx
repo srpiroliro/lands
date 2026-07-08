@@ -6,7 +6,7 @@ import { PublicFeedbackForm } from "@/components/proposal/public-feedback-form"
 import {
   formatMoneyCents,
   getPublicProposalView,
-} from "@/lib/proposals/render-proposal"
+} from "@/lib/engine/render-proposal"
 
 export const dynamic = "force-dynamic"
 

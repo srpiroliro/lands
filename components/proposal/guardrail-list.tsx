@@ -1,4 +1,4 @@
-import type { GuardrailIssueView } from "@/lib/proposals/render-proposal"
+import type { GuardrailIssueView } from "@/lib/engine/render-proposal"
 
 type GuardrailListProps = {
   issues: GuardrailIssueView[]

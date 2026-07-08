@@ -5,10 +5,7 @@ import type {
   ValidatedLineItem,
   ValidationResult,
 } from "@/lib/domain/types"
-import type {
-  MeasurementAuditResult,
-  ProposalDraft,
-} from "@/lib/proposals/types"
+import type { MeasurementAuditResult, ProposalDraft } from "@/lib/engine/types"
 
 const BUSINESS_MIN_TOTAL_CENTS = 800_000
 const BUSINESS_MAX_TOTAL_CENTS = 12_000_000

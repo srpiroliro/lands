@@ -1,7 +1,4 @@
-import {
-  formatMoneyCents,
-  formatPercent,
-} from "@/lib/proposals/render-proposal"
+import { formatMoneyCents, formatPercent } from "@/lib/engine/render-proposal"
 
 type ProposalSummaryProps = {
   title: string

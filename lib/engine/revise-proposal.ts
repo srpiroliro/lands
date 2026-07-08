@@ -8,11 +8,7 @@ import type {
 } from "@/lib/domain/types"
 import { env } from "@/lib/env"
 import { proposalAi } from "@/lib/proposal"
-import { proposalDraftSchema } from "@/lib/proposals/schema"
-import {
-  buildProposalReviewBlocks,
-  buildProposalReviewText,
-} from "@/lib/proposals/slack-blocks"
+import { proposalDraftSchema } from "@/lib/engine/schema"
 import { review } from "@/lib/review"
 
 const AI_MODEL_LABEL = "selected-proposal-ai"
@@ -44,22 +40,6 @@ function conciseError(error: unknown): string {
   return message.length > 500 ? `${message.slice(0, 497)}...` : message
 }
 
-function blockersFromIssues(
-  issues: Array<{ severity: string; code: string; message: string }>
-): string[] {
-  return issues
-    .filter((issue) => issue.severity === "BLOCKING")
-    .map((issue) => `${issue.code}: ${issue.message}`)
-}
-
-function warningsFromIssues(
-  issues: Array<{ severity: string; code: string; message: string }>
-): string[] {
-  return issues
-    .filter((issue) => issue.severity === "WARNING")
-    .map((issue) => `${issue.code}: ${issue.message}`)
-}
-
 async function requestReviewForVersion(input: {
   proposalId: string
   versionId: string
@@ -70,40 +50,25 @@ async function requestReviewForVersion(input: {
   issues: GuardrailIssueDraft[]
   slackThreadTs?: string
 }) {
-  const internalUrl = proposalUrl(input.proposalId)
-  const summaryText = buildProposalReviewText({
+  const request = {
+    proposalId: input.proposalId,
+    versionId: input.versionId,
+    internalProposalUrl: proposalUrl(input.proposalId),
     leadName: input.leadName,
     projectType: input.projectType,
     totalCents: input.totalCents,
     blocked: input.blocked,
-  })
-  const request = {
-    proposalId: input.proposalId,
-    versionId: input.versionId,
-    summaryText,
-    blocks: buildProposalReviewBlocks({
-      proposalId: input.proposalId,
-      versionId: input.versionId,
-      internalUrl,
-      leadName: input.leadName,
-      projectType: input.projectType,
-      totalCents: input.totalCents,
-      issues: input.issues,
-    }),
-    totalCents: input.totalCents,
-    warnings: warningsFromIssues(input.issues),
-    blockers: blockersFromIssues(input.issues),
-    internalProposalUrl: internalUrl,
+    issues: input.issues,
   }
 
   if (input.slackThreadTs) {
-    return review.postRevisionUpdate({
+    return review.postProposalRevisionUpdate({
       ...request,
       slackThreadTs: input.slackThreadTs,
     })
   }
 
-  return review.requestReview(request)
+  return review.requestProposalReview(request)
 }
 
 export async function reviseProposalFromFeedback(input: {

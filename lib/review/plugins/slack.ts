@@ -1,12 +1,20 @@
 import { WebClient } from "@slack/web-api"
 
 import { env } from "@/lib/env"
-import type { ReviewPlugin, ReviewRequestMessage, ReviewThreadRef } from "@/lib/review/types"
+import { buildProposalReviewMessage } from "@/lib/review/plugins/slack/blocks"
+import type {
+  ReviewPlugin,
+  ReviewRequestMessage,
+  ReviewThreadRef,
+} from "@/lib/review/types"
 
 const slack = new WebClient(env.SLACK_BOT_TOKEN)
 
 function proposalUrl(input: ReviewRequestMessage): string {
-  return input.internalProposalUrl ?? `${env.APP_BASE_URL}/proposals/${input.proposalId}`
+  return (
+    input.internalProposalUrl ??
+    `${env.APP_BASE_URL}/proposals/${input.proposalId}`
+  )
 }
 
 function formatCents(cents: number | undefined): string {
@@ -47,7 +55,10 @@ function actionBlocks(input: ReviewRequestMessage): unknown[] {
       type: "section",
       fields: [
         { type: "mrkdwn", text: `*Total:*\n${formatCents(input.totalCents)}` },
-        { type: "mrkdwn", text: `*Internal proposal:*\n<${url}|Open proposal>` },
+        {
+          type: "mrkdwn",
+          text: `*Internal proposal:*\n<${url}|Open proposal>`,
+        },
         { type: "mrkdwn", text: `*Warnings:*\n${formatList(input.warnings)}` },
         { type: "mrkdwn", text: `*Blockers:*\n${formatList(input.blockers)}` },
       ],
@@ -84,7 +95,9 @@ function actionBlocks(input: ReviewRequestMessage): unknown[] {
   ]
 }
 
-async function postReviewMessage(input: ReviewRequestMessage & { threadTs?: string }): Promise<ReviewThreadRef> {
+async function postReviewMessage(
+  input: ReviewRequestMessage & { threadTs?: string }
+): Promise<ReviewThreadRef> {
   const message = {
     channel: env.SLACK_REVIEW_CHANNEL_ID,
     text: input.summaryText,
@@ -107,12 +120,15 @@ async function postReviewMessage(input: ReviewRequestMessage & { threadTs?: stri
 }
 
 export const slackReviewPlugin: ReviewPlugin = {
-  requestReview(input) {
-    return postReviewMessage(input)
+  requestProposalReview(input) {
+    return postReviewMessage(buildProposalReviewMessage(input))
   },
 
-  postRevisionUpdate(input) {
-    return postReviewMessage({ ...input, threadTs: input.slackThreadTs })
+  postProposalRevisionUpdate(input) {
+    return postReviewMessage({
+      ...buildProposalReviewMessage(input),
+      threadTs: input.slackThreadTs,
+    })
   },
 
   async postThreadMessage(input) {

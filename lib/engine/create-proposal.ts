@@ -10,12 +10,8 @@ import { env } from "@/lib/env"
 import type { LeadIntakeInput } from "@/lib/intake/types"
 import { media } from "@/lib/media"
 import { proposalAi } from "@/lib/proposal"
-import { proposalDraftSchema } from "@/lib/proposals/schema"
-import type { ProposalCreateResult } from "@/lib/proposals/types"
-import {
-  buildProposalReviewBlocks,
-  buildProposalReviewText,
-} from "@/lib/proposals/slack-blocks"
+import { proposalDraftSchema } from "@/lib/engine/schema"
+import type { ProposalCreateResult } from "@/lib/engine/types"
 import { review } from "@/lib/review"
 
 const AI_MODEL_LABEL = "selected-proposal-ai"
@@ -192,36 +188,15 @@ export async function createProposal(
   }
 
   const internalUrl = proposalUrl(proposal.id)
-  const summaryText = buildProposalReviewText({
+  const reviewThread = await review.requestProposalReview({
+    proposalId: proposal.id,
+    versionId: version.id,
+    internalProposalUrl: internalUrl,
     leadName: lead.name,
     projectType: lead.projectType,
     totalCents: validation.totalCents,
     blocked: validation.blocked,
-  })
-  const warnings = validation.issues
-    .filter((issue) => issue.severity === "WARNING")
-    .map((issue) => `${issue.code}: ${issue.message}`)
-  const blockers = validation.issues
-    .filter((issue) => issue.severity === "BLOCKING")
-    .map((issue) => `${issue.code}: ${issue.message}`)
-
-  const reviewThread = await review.requestReview({
-    proposalId: proposal.id,
-    versionId: version.id,
-    summaryText,
-    blocks: buildProposalReviewBlocks({
-      proposalId: proposal.id,
-      versionId: version.id,
-      internalUrl,
-      leadName: lead.name,
-      projectType: lead.projectType,
-      totalCents: validation.totalCents,
-      issues: validation.issues,
-    }),
-    totalCents: validation.totalCents,
-    warnings,
-    blockers,
-    internalProposalUrl: internalUrl,
+    issues: validation.issues,
   })
 
   const nextStatus = validation.blocked ? "BLOCKED" : "PENDING_REVIEW"

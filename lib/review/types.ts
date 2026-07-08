@@ -1,3 +1,16 @@
+import type { GuardrailIssueDraft } from "@/lib/domain/types"
+
+export type ProposalReviewRequest = {
+  proposalId: string
+  versionId: string
+  internalProposalUrl: string
+  leadName: string
+  projectType: string
+  totalCents: number
+  blocked: boolean
+  issues: GuardrailIssueDraft[]
+}
+
 export type ReviewRequestMessage = {
   proposalId: string
   versionId: string
@@ -17,9 +30,15 @@ export type ReviewThreadRef = {
 }
 
 export interface ReviewPlugin {
-  requestReview(input: ReviewRequestMessage): Promise<ReviewThreadRef>
-  postRevisionUpdate(input: ReviewRequestMessage & { slackThreadTs: string }): Promise<ReviewThreadRef>
-  postThreadMessage(input: { slackChannelId: string; slackThreadTs: string; text: string }): Promise<void>
+  requestProposalReview(input: ProposalReviewRequest): Promise<ReviewThreadRef>
+  postProposalRevisionUpdate(
+    input: ProposalReviewRequest & { slackThreadTs: string }
+  ): Promise<ReviewThreadRef>
+  postThreadMessage(input: {
+    slackChannelId: string
+    slackThreadTs: string
+    text: string
+  }): Promise<void>
 }
 
 export type SlackActionId = "proposal_approve" | "proposal_reject"

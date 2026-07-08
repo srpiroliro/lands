@@ -8,7 +8,7 @@ import {
   formatMoneyCents,
   formatPercent,
   getInternalProposalView,
-} from "@/lib/proposals/render-proposal"
+} from "@/lib/engine/render-proposal"
 
 export const dynamic = "force-dynamic"
 

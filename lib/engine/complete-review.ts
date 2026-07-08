@@ -5,8 +5,8 @@ import { prisma } from "@/lib/db"
 import { delivery } from "@/lib/delivery"
 import type { DeliveryChannel } from "@/lib/delivery/types"
 import { env } from "@/lib/env"
-import { resolveApprovedProposalDeliveryTarget } from "@/lib/proposals/delivery-target"
-import { renderApprovedProposalDelivery } from "@/lib/proposals/render-delivery"
+import { resolveApprovedProposalDeliveryTarget } from "@/lib/engine/delivery-target"
+import { renderApprovedProposalDelivery } from "@/lib/engine/render-delivery"
 import { review as reviewPlugin } from "@/lib/review"
 
 function toJsonPayload(input: unknown): Prisma.InputJsonValue {
