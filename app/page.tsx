@@ -1,3 +1,5 @@
+import { Suspense } from "react"
+
 import { IntakeForm } from "@/components/proposal/intake-form"
 
 const architectureSteps = [
@@ -8,6 +10,14 @@ const architectureSteps = [
   "Slack review",
   "Delivery",
 ]
+
+function IntakeFormFallback() {
+  return (
+    <div className="rounded-2xl border bg-card p-6 shadow-sm">
+      <p className="text-sm text-muted-foreground">Loading intake form…</p>
+    </div>
+  )
+}
 
 export default function Page() {
   return (
@@ -35,7 +45,9 @@ export default function Page() {
           </div>
         </div>
 
-        <IntakeForm />
+        <Suspense fallback={<IntakeFormFallback />}>
+          <IntakeForm />
+        </Suspense>
       </section>
 
       <section
