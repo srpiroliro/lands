@@ -115,9 +115,6 @@ async function approveProposalReview(input: {
   decidedBy?: string
 }): Promise<void> {
   const review = await loadRequestedReview(input)
-  const blockingIssue = review.version.guardrails.find(
-    (issue) => issue.severity === "BLOCKING"
-  )
   const deliveryTarget = resolveApprovedProposalDeliveryTarget({
     deliveryPlugin: env.DELIVERY_PLUGIN,
     leadEmail: review.proposal.lead.email,
@@ -130,29 +127,6 @@ async function approveProposalReview(input: {
     proposalUrl,
     totalCents: review.version.totalCents,
   })
-
-  if (blockingIssue) {
-    const error = `Delivery blocked by guardrail ${blockingIssue.code}: ${blockingIssue.message}`
-    await recordBlockedApproval({
-      proposalId: review.proposalId,
-      leadId: review.proposal.leadId,
-      channel: deliveryTarget.channel,
-      recipient: deliveryTarget.recipient,
-      subject: rendered.subject,
-      payload: {
-        proposalUrl,
-        versionId: review.versionId,
-        blockingGuardrailId: blockingIssue.id,
-      },
-      error,
-    })
-    await postDecisionThreadMessage({
-      slackChannelId: review.slackChannelId,
-      slackThreadTs: review.slackThreadTs,
-      text: `Approval by ${slackActor(input.decidedBy)} failed: ${error}`,
-    })
-    throw new Error(error)
-  }
 
   if (deliveryTarget.missingRecipientError) {
     const error = deliveryTarget.missingRecipientError
