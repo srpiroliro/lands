@@ -1,3 +1,5 @@
+import { after } from "next/server"
+
 import { env } from "@/lib/env"
 import { completeProposalReview } from "@/lib/proposals/complete-review"
 import { parseSlackActionPayload } from "@/lib/review/schema"
@@ -34,11 +36,17 @@ export async function POST(request: Request): Promise<Response> {
     const decision =
       action.actionId === "proposal_approve" ? "approved" : "rejected"
 
-    await completeProposalReview({
-      proposalId: action.proposalId,
-      versionId: action.versionId,
-      decision,
-      decidedBy: action.userId,
+    after(async () => {
+      try {
+        await completeProposalReview({
+          proposalId: action.proposalId,
+          versionId: action.versionId,
+          decision,
+          decidedBy: action.userId,
+        })
+      } catch (error) {
+        console.error("Slack proposal review completion failed", error)
+      }
     })
 
     return Response.json({ ok: true, decision })
