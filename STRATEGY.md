@@ -119,3 +119,7 @@ My idea is that the Pricing Agent actually saves more time and money.
 
 
 ## Other Agents
+Lead Qualifier Agent
+Proposal Follow-Up Agent
+Daily Crew Summarizer Agent
+
