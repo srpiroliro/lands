@@ -3,7 +3,9 @@ import type { Prisma } from "@prisma/client"
 import { crm } from "@/lib/crm"
 import { prisma } from "@/lib/db"
 import { delivery } from "@/lib/delivery"
+import type { DeliveryChannel } from "@/lib/delivery/types"
 import { env } from "@/lib/env"
+import { resolveApprovedProposalDeliveryTarget } from "@/lib/proposals/delivery-target"
 import { renderApprovedProposalDelivery } from "@/lib/proposals/render-delivery"
 import { review as reviewPlugin } from "@/lib/review"
 
@@ -11,8 +13,10 @@ function toJsonPayload(input: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(input)) as Prisma.InputJsonValue
 }
 
-function selectedDeliveryProvider(): "resend" | "sendgrid" {
-  return env.DELIVERY_PLUGIN === "sendgrid" ? "sendgrid" : "resend"
+function selectedDeliveryProvider(): "resend" | "sendgrid" | "slack" {
+  if (env.DELIVERY_PLUGIN === "sendgrid") return "sendgrid"
+  if (env.DELIVERY_PLUGIN === "slack") return "slack"
+  return "resend"
 }
 
 function publicProposalUrl(publicToken: string): string {
@@ -75,6 +79,7 @@ async function loadRequestedReview(input: {
 async function recordBlockedApproval(input: {
   proposalId: string
   leadId: string
+  channel: DeliveryChannel
   recipient: string
   subject?: string
   payload: unknown
@@ -85,7 +90,7 @@ async function recordBlockedApproval(input: {
       data: {
         proposalId: input.proposalId,
         provider: selectedDeliveryProvider(),
-        channel: "email",
+        channel: input.channel,
         recipient: input.recipient,
         subject: input.subject,
         status: "FAILED",
@@ -113,7 +118,11 @@ async function approveProposalReview(input: {
   const blockingIssue = review.version.guardrails.find(
     (issue) => issue.severity === "BLOCKING"
   )
-  const recipient = review.proposal.lead.email.trim()
+  const deliveryTarget = resolveApprovedProposalDeliveryTarget({
+    deliveryPlugin: env.DELIVERY_PLUGIN,
+    leadEmail: review.proposal.lead.email,
+    slackDeliveryChannelId: env.SLACK_DELIVERY_CHANNEL_ID,
+  })
   const proposalUrl = publicProposalUrl(review.proposal.publicToken)
   const rendered = renderApprovedProposalDelivery({
     leadName: review.proposal.lead.name,
@@ -127,7 +136,8 @@ async function approveProposalReview(input: {
     await recordBlockedApproval({
       proposalId: review.proposalId,
       leadId: review.proposal.leadId,
-      recipient: recipient || "missing-recipient",
+      channel: deliveryTarget.channel,
+      recipient: deliveryTarget.recipient,
       subject: rendered.subject,
       payload: {
         proposalUrl,
@@ -144,12 +154,13 @@ async function approveProposalReview(input: {
     throw new Error(error)
   }
 
-  if (!recipient) {
-    const error = "Delivery blocked because lead email is missing"
+  if (deliveryTarget.missingRecipientError) {
+    const error = deliveryTarget.missingRecipientError
     await recordBlockedApproval({
       proposalId: review.proposalId,
       leadId: review.proposal.leadId,
-      recipient: "missing-recipient",
+      channel: deliveryTarget.channel,
+      recipient: deliveryTarget.recipient,
       subject: rendered.subject,
       payload: { proposalUrl, versionId: review.versionId },
       error,
@@ -184,8 +195,8 @@ async function approveProposalReview(input: {
 
   try {
     const result = await delivery.deliver({
-      channel: "email",
-      to: recipient,
+      channel: deliveryTarget.channel,
+      to: deliveryTarget.recipient,
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
@@ -199,7 +210,7 @@ async function approveProposalReview(input: {
           proposalId: review.proposalId,
           provider: result.provider,
           channel: result.channel,
-          recipient,
+          recipient: deliveryTarget.recipient,
           subject: rendered.subject,
           status: "DELIVERED",
           providerMessageId: result.messageId,
@@ -224,7 +235,7 @@ async function approveProposalReview(input: {
     await postDecisionThreadMessage({
       slackChannelId: review.slackChannelId,
       slackThreadTs: review.slackThreadTs,
-      text: `Approved by ${slackActor(input.decidedBy)}. Proposal delivered to ${recipient}.`,
+      text: `Approved by ${slackActor(input.decidedBy)}. Proposal delivered to ${deliveryTarget.recipient}.`,
     })
   } catch (error) {
     const message =
@@ -233,8 +244,8 @@ async function approveProposalReview(input: {
       data: {
         proposalId: review.proposalId,
         provider: selectedDeliveryProvider(),
-        channel: "email",
-        recipient,
+        channel: deliveryTarget.channel,
+        recipient: deliveryTarget.recipient,
         subject: rendered.subject,
         status: "FAILED",
         error: message,
