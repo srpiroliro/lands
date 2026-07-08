@@ -1,0 +1,37 @@
+export type ReviewRequestMessage = {
+  proposalId: string
+  versionId: string
+  summaryText: string
+  blocks: unknown[]
+}
+
+export type ReviewThreadRef = {
+  channel: "slack"
+  slackChannelId: string
+  slackMessageTs: string
+  slackThreadTs: string
+}
+
+export interface ReviewPlugin {
+  requestReview(input: ReviewRequestMessage): Promise<ReviewThreadRef>
+  postRevisionUpdate(input: ReviewRequestMessage & { slackThreadTs: string }): Promise<ReviewThreadRef>
+  postThreadMessage(input: { slackChannelId: string; slackThreadTs: string; text: string }): Promise<void>
+}
+
+export type SlackActionId = "proposal_approve" | "proposal_reject"
+
+export type SlackMessageEvent = {
+  type: "message"
+  channel: string
+  user?: string
+  text?: string
+  ts: string
+  thread_ts?: string
+  bot_id?: string
+  subtype?: string
+}
+
+export type SlackUrlVerificationEvent = {
+  type: "url_verification"
+  challenge: string
+}
