@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { env } from "@/lib/env"
 import { reviseProposalFromSlackThread } from "@/lib/engine/revise-proposal"
+import { review } from "@/lib/review"
 import { verifySlackSignature } from "@/lib/review/slack-signature"
 import type { SlackMessageEvent } from "@/lib/review/types"
 
@@ -106,6 +107,16 @@ export async function POST(request: Request): Promise<Response> {
   })
 
   after(async () => {
+    try {
+      await review.acknowledgeThreadMessage({
+        slackChannelId: event.channel,
+        slackThreadTs: event.thread_ts as string,
+        slackMessageTs: event.ts,
+      })
+    } catch (error) {
+      console.error("Slack threaded message acknowledgement failed", error)
+    }
+
     try {
       await reviseProposalFromSlackThread({
         slackChannelId: event.channel,

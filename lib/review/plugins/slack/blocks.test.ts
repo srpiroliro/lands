@@ -14,6 +14,10 @@ describe("Slack proposal review message", () => {
       description:
         "Replace the existing patio with premium pavers & add a shaded seating area.",
       timeline: "4–6 weeks after material selection",
+      photoUrls: [
+        "https://images.example.test/site-1.webp",
+        "https://images.example.test/site-2.webp",
+      ],
       blocked: true,
       issues: [
         {
@@ -48,6 +52,10 @@ describe("Slack proposal review message", () => {
       text: { type: "plain_text", text: "A&B <Home> — Patio" },
     })
     expect(payload).toContain("Open proposal")
+    expect(payload).toContain("https://images.example.test/site-1.webp")
+    expect(payload).toContain("https://images.example.test/site-2.webp")
+    expect(payload).toContain("Site photo 1 for A&B <Home> — Patio")
+    expect(payload).toContain("Site photo 2 for A&B <Home> — Patio")
     expect(payload).toContain("*Proposal*\\nA&amp;B &lt;Home&gt; — Patio")
     expect(payload).toContain("*Lead*\\nA&amp;B &lt;Home&gt;")
     expect(payload).toContain("*Project type*\\nPatio")
@@ -76,6 +84,7 @@ describe("Slack proposal review message", () => {
       totalCents: 28_000_00,
       description: "Premium paver patio and shaded seating area.",
       timeline: "4–6 weeks",
+      photoUrls: [],
       blocked: false,
       issues: [],
     })

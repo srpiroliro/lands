@@ -9,6 +9,7 @@ export type ProposalReviewRequest = {
   totalCents: number
   description: string
   timeline: string
+  photoUrls: string[]
   blocked: boolean
   issues: GuardrailIssueDraft[]
 }
@@ -32,6 +33,11 @@ export interface ReviewPlugin {
   postProposalRevisionUpdate(
     input: ProposalReviewRequest & { slackThreadTs: string }
   ): Promise<ReviewThreadRef>
+  acknowledgeThreadMessage(input: {
+    slackChannelId: string
+    slackThreadTs: string
+    slackMessageTs: string
+  }): Promise<void>
   postThreadMessage(input: {
     slackChannelId: string
     slackThreadTs: string

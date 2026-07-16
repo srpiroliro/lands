@@ -48,6 +48,7 @@ async function requestReviewForVersion(input: {
   totalCents: number
   description: string
   timeline: string
+  photoUrls: string[]
   blocked: boolean
   issues: GuardrailIssueDraft[]
   slackThreadTs?: string
@@ -61,6 +62,7 @@ async function requestReviewForVersion(input: {
     totalCents: input.totalCents,
     description: input.description,
     timeline: input.timeline,
+    photoUrls: input.photoUrls,
     blocked: input.blocked,
     issues: input.issues,
   }
@@ -261,6 +263,7 @@ export async function reviseProposalFromFeedback(input: {
       totalCents: validation.totalCents,
       description: draft.executiveSummary,
       timeline: draft.timeline,
+      photoUrls: photos.map((photo) => photo.url),
       blocked: validation.blocked,
       issues: validation.issues,
       slackThreadTs: input.slackThreadTs,

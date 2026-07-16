@@ -210,6 +210,7 @@ export async function createProposalForLead(
     totalCents: validation.totalCents,
     description: draft.executiveSummary,
     timeline: draft.timeline,
+    photoUrls: storedPhotos.map((photo) => photo.url),
     blocked: validation.blocked,
     issues: validation.issues,
   })

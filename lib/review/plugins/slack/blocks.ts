@@ -56,6 +56,17 @@ function buildProposalReviewBlocks(input: ProposalReviewRequest): unknown[] {
   const timeline = escapeSlackText(compactText(input.timeline, 120))
   const description = escapeSlackText(compactText(input.description, 500))
 
+  const photoBlocks = input.photoUrls.map((url, index) => ({
+    type: "image",
+    image_url: url,
+    alt_text: `Site photo ${index + 1} for ${proposalName}`,
+    title: {
+      type: "plain_text",
+      text:
+        input.photoUrls.length === 1 ? "Site photo" : `Site photo ${index + 1}`,
+    },
+  }))
+
   return [
     {
       type: "header",
@@ -85,6 +96,7 @@ function buildProposalReviewBlocks(input: ProposalReviewRequest): unknown[] {
         text: `<${escapeSlackText(input.internalProposalUrl)}|Open proposal>`,
       },
     },
+    ...photoBlocks,
     {
       type: "context",
       elements: [

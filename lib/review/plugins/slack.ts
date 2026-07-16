@@ -46,6 +46,29 @@ export const slackReviewPlugin: ReviewPlugin = {
     })
   },
 
+  async acknowledgeThreadMessage(input) {
+    try {
+      await slack.reactions.add({
+        channel: input.slackChannelId,
+        timestamp: input.slackMessageTs,
+        name: "eyes",
+      })
+    } catch (reactionError) {
+      try {
+        await slack.chat.postMessage({
+          channel: input.slackChannelId,
+          thread_ts: input.slackThreadTs,
+          text: "Received — I’m working on it. 👀",
+        })
+      } catch (messageError) {
+        throw new AggregateError(
+          [reactionError, messageError],
+          "Could not acknowledge the Slack thread message"
+        )
+      }
+    }
+  },
+
   async postThreadMessage(input) {
     await slack.chat.postMessage({
       channel: input.slackChannelId,
