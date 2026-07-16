@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useEffect, useRef } from "react"
+import { startTransition, useOptimistic, useState, type FormEvent } from "react"
 import { useSearchParams } from "next/navigation"
 
 import { submitProposalIntake } from "@/app/actions"
@@ -14,6 +14,12 @@ import type { IntakeActionState } from "@/lib/intake/types"
 const initialState: IntakeActionState = {
   ok: false,
   message: "",
+}
+
+const queuedState: IntakeActionState = {
+  ok: true,
+  message:
+    "Proposal added to the queue successfully. You can submit another while it generates; Slack will notify you when it is ready.",
 }
 
 const inputClassName =
@@ -41,20 +47,32 @@ export function IntakeForm() {
   const intakeDefaults = shouldPrefillDemoIntake(searchParams)
     ? demoIntakeDefaults
     : null
-  const [state, formAction, pending] = useActionState(
-    submitProposalIntake,
-    initialState
-  )
-  const formRef = useRef<HTMLFormElement>(null)
+  const [state, setState] = useState(initialState)
+  const [displayState, setOptimisticState] = useOptimistic(state)
 
-  useEffect(() => {
-    if (state.ok) formRef.current?.reset()
-  }, [state])
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    startTransition(async () => {
+      setOptimisticState(queuedState)
+
+      try {
+        const result = await submitProposalIntake(initialState, formData)
+        setState(result)
+      } catch {
+        setState({
+          ok: false,
+          message:
+            "We could not submit the proposal. Your form is still available; please try again.",
+        })
+      }
+    })
+  }
 
   return (
     <form
-      action={formAction}
-      ref={formRef}
+      onSubmit={handleSubmit}
       className="space-y-6 rounded-2xl border bg-card p-6 shadow-sm"
     >
       <div>
@@ -65,17 +83,17 @@ export function IntakeForm() {
         </p>
       </div>
 
-      {state.message ? (
+      {displayState.message ? (
         <div
           className={
-            state.ok
+            displayState.ok
               ? "rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-100"
               : "rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
           }
           role="status"
           aria-live="polite"
         >
-          <p>{state.message}</p>
+          <p>{displayState.message}</p>
         </div>
       ) : null}
 
@@ -94,7 +112,7 @@ export function IntakeForm() {
             aria-describedby="name-error"
           />
           <div id="name-error">
-            <FieldError errors={state.errors?.name} />
+            <FieldError errors={displayState.errors?.name} />
           </div>
         </div>
 
@@ -113,7 +131,7 @@ export function IntakeForm() {
             aria-describedby="email-error"
           />
           <div id="email-error">
-            <FieldError errors={state.errors?.email} />
+            <FieldError errors={displayState.errors?.email} />
           </div>
         </div>
 
@@ -131,7 +149,7 @@ export function IntakeForm() {
             aria-describedby="phone-error"
           />
           <div id="phone-error">
-            <FieldError errors={state.errors?.phone} />
+            <FieldError errors={displayState.errors?.phone} />
           </div>
         </div>
 
@@ -148,7 +166,7 @@ export function IntakeForm() {
             aria-describedby="address-error"
           />
           <div id="address-error">
-            <FieldError errors={state.errors?.address} />
+            <FieldError errors={displayState.errors?.address} />
           </div>
         </div>
 
@@ -184,7 +202,7 @@ export function IntakeForm() {
             <option value="Water or fire feature">Water or fire feature</option>
           </select>
           <div id="projectType-error">
-            <FieldError errors={state.errors?.projectType} />
+            <FieldError errors={displayState.errors?.projectType} />
           </div>
         </div>
 
@@ -209,7 +227,7 @@ export function IntakeForm() {
               Dollars
             </p>
             <div id="budgetMin-error">
-              <FieldError errors={state.errors?.budgetMin} />
+              <FieldError errors={displayState.errors?.budgetMin} />
             </div>
           </div>
 
@@ -233,7 +251,7 @@ export function IntakeForm() {
               Dollars
             </p>
             <div id="budgetMax-error">
-              <FieldError errors={state.errors?.budgetMax} />
+              <FieldError errors={displayState.errors?.budgetMax} />
             </div>
           </div>
         </div>
@@ -258,7 +276,7 @@ export function IntakeForm() {
           unknowns.
         </p>
         <div id="notes-error">
-          <FieldError errors={state.errors?.notes} />
+          <FieldError errors={displayState.errors?.notes} />
         </div>
       </div>
 
@@ -280,16 +298,12 @@ export function IntakeForm() {
           Upload 1–8 JPG, PNG, or WebP photos under 10MB each.
         </p>
         <div id="photos-error">
-          <FieldError errors={state.errors?.photos} />
+          <FieldError errors={displayState.errors?.photos} />
         </div>
       </div>
 
-      <Button
-        className="h-11 w-full text-base"
-        type="submit"
-        disabled={pending}
-      >
-        {pending ? "Queueing proposal…" : "Queue proposal draft"}
+      <Button className="h-11 w-full text-base" type="submit">
+        Add proposal to queue
       </Button>
     </form>
   )

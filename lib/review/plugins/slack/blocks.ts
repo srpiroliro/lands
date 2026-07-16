@@ -18,28 +18,39 @@ function escapeSlackText(value: string): string {
 
 function compactText(value: string, maxLength: number): string {
   const compact = value.trim().replace(/\s+/g, " ")
-  if (compact.length <= maxLength) return compact
-  return `${compact.slice(0, maxLength - 1).trimEnd()}…`
+  const characters = Array.from(compact)
+  if (characters.length <= maxLength) return compact
+  return `${characters
+    .slice(0, maxLength - 1)
+    .join("")
+    .trimEnd()}…`
 }
 
 function formatTotal(totalCents: number): string {
   return dollars.format(totalCents / 100)
 }
 
+function buildProposalName(input: ProposalReviewRequest): string {
+  return compactText(`${input.leadName} — ${input.projectType}`, 150)
+}
+
 function buildProposalReviewText(input: ProposalReviewRequest): string {
+  const proposalName = escapeSlackText(buildProposalName(input))
   const leadName = escapeSlackText(compactText(input.leadName, 120))
   const projectType = escapeSlackText(compactText(input.projectType, 120))
   const timeline = escapeSlackText(compactText(input.timeline, 120))
   const description = escapeSlackText(compactText(input.description, 180))
 
   return [
-    `Proposal completed for ${leadName}.`,
-    `${projectType} · ${formatTotal(input.totalCents)} · ${timeline}.`,
+    `Proposal ${proposalName} completed.`,
+    `${leadName} · ${projectType} · ${formatTotal(input.totalCents)} · ${timeline}.`,
     description,
   ].join(" ")
 }
 
 function buildProposalReviewBlocks(input: ProposalReviewRequest): unknown[] {
+  const proposalName = buildProposalName(input)
+  const escapedProposalName = escapeSlackText(proposalName)
   const leadName = escapeSlackText(compactText(input.leadName, 120))
   const projectType = escapeSlackText(compactText(input.projectType, 120))
   const timeline = escapeSlackText(compactText(input.timeline, 120))
@@ -48,13 +59,14 @@ function buildProposalReviewBlocks(input: ProposalReviewRequest): unknown[] {
   return [
     {
       type: "header",
-      text: { type: "plain_text", text: "Proposal completed" },
+      text: { type: "plain_text", text: proposalName },
     },
     {
       type: "section",
       fields: [
+        { type: "mrkdwn", text: `*Proposal*\n${escapedProposalName}` },
         { type: "mrkdwn", text: `*Lead*\n${leadName}` },
-        { type: "mrkdwn", text: `*Project*\n${projectType}` },
+        { type: "mrkdwn", text: `*Project type*\n${projectType}` },
         {
           type: "mrkdwn",
           text: `*Total*\n${formatTotal(input.totalCents)}`,

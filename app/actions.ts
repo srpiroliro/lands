@@ -100,7 +100,7 @@ export async function submitProposalIntake(
     return {
       ok: true,
       message:
-        "Proposal queued. You can submit another while it generates; Slack will notify you when it is ready.",
+        "Proposal added to the queue successfully. You can submit another while it generates; Slack will notify you when it is ready.",
     }
   } catch (error) {
     console.error("Proposal queueing failed", error)

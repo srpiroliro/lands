@@ -58,7 +58,7 @@ describe("submitProposalIntake", () => {
     expect(result).toEqual({
       ok: true,
       message:
-        "Proposal queued. You can submit another while it generates; Slack will notify you when it is ready.",
+        "Proposal added to the queue successfully. You can submit another while it generates; Slack will notify you when it is ready.",
     })
     expect(mocks.queueProposal).toHaveBeenCalledWith(
       expect.objectContaining({

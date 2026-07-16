@@ -32,7 +32,7 @@ describe("Slack proposal review message", () => {
     })
 
     expect(message.summaryText).toContain(
-      "Proposal completed for A&amp;B &lt;Home&gt;."
+      "Proposal A&amp;B &lt;Home&gt; — Patio completed."
     )
     expect(message.summaryText).not.toContain("<Home>")
     expect(message.summaryText).toContain("Patio · $28,000")
@@ -43,10 +43,14 @@ describe("Slack proposal review message", () => {
       blocks: message.blocks,
     })
 
-    expect(payload).toContain("Proposal completed")
+    expect(message.blocks[0]).toEqual({
+      type: "header",
+      text: { type: "plain_text", text: "A&B <Home> — Patio" },
+    })
     expect(payload).toContain("Open proposal")
+    expect(payload).toContain("*Proposal*\\nA&amp;B &lt;Home&gt; — Patio")
     expect(payload).toContain("*Lead*\\nA&amp;B &lt;Home&gt;")
-    expect(payload).toContain("*Project*\\nPatio")
+    expect(payload).toContain("*Project type*\\nPatio")
     expect(payload).toContain("*Total*\\n$28,000")
     expect(payload).toContain("*Timeline*\\n4–6 weeks after material selection")
     expect(payload).toContain(
@@ -60,5 +64,26 @@ describe("Slack proposal review message", () => {
     expect(payload).not.toContain("UNKNOWN_SKU")
     expect(payload).not.toContain("Needs render")
     expect(payload).not.toContain("Missing")
+  })
+
+  it("truncates long proposal names without splitting emoji surrogates", () => {
+    const message = buildProposalReviewMessage({
+      proposalId: "proposal_123",
+      versionId: "version_456",
+      internalProposalUrl: "https://example.test/proposals/proposal_123",
+      leadName: `${"A".repeat(148)}😀`,
+      projectType: "Patio",
+      totalCents: 28_000_00,
+      description: "Premium paver patio and shaded seating area.",
+      timeline: "4–6 weeks",
+      blocked: false,
+      issues: [],
+    })
+    const header = message.blocks[0] as {
+      text: { text: string }
+    }
+
+    expect(header.text.text).toBe(`${"A".repeat(148)}😀…`)
+    expect(header.text.text).toBe(header.text.text.toWellFormed())
   })
 })
