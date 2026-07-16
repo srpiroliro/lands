@@ -1,12 +1,17 @@
 "use server"
 
+import { after } from "next/server"
+
 import {
   intakeFieldsSchema,
   parsePhotoFiles,
   validatePhotoFiles,
 } from "@/lib/intake/schema"
 import type { IntakeActionState } from "@/lib/intake/types"
-import { createProposal } from "@/lib/engine/create-proposal"
+import {
+  processQueuedProposal,
+  queueProposal,
+} from "@/lib/engine/proposal-queue"
 
 const initialFieldErrors: Record<string, string[]> = {}
 
@@ -69,32 +74,40 @@ export async function submitProposalIntake(
     }
   }
 
+  const input = {
+    name: fields.name,
+    email: fields.email,
+    phone: fields.phone ?? null,
+    address: fields.address ?? null,
+    projectType: fields.projectType,
+    budgetMinCents: dollarsToCents(fields.budgetMin),
+    budgetMaxCents: dollarsToCents(fields.budgetMax),
+    notes: fields.notes,
+    photos,
+  }
+
   try {
-    const result = await createProposal({
-      name: fields.name,
-      email: fields.email,
-      phone: fields.phone ?? null,
-      address: fields.address ?? null,
-      projectType: fields.projectType,
-      budgetMinCents: dollarsToCents(fields.budgetMin),
-      budgetMaxCents: dollarsToCents(fields.budgetMax),
-      notes: fields.notes,
-      photos,
+    const { jobId } = await queueProposal(input)
+
+    after(async () => {
+      try {
+        await processQueuedProposal(jobId)
+      } catch (error) {
+        console.error("Queued proposal generation failed", error)
+      }
     })
 
     return {
       ok: true,
-      proposalId: result.proposalId,
-      message: result.blocked
-        ? "Proposal draft created but blocked by guardrails. Review it before sending."
-        : "Proposal draft created and sent to Slack for review.",
+      message:
+        "Proposal queued. You can submit another while it generates; Slack will notify you when it is ready.",
     }
   } catch (error) {
-    console.error("Proposal intake failed", error)
+    console.error("Proposal queueing failed", error)
     return {
       ok: false,
       message:
-        "We could not generate the proposal draft. Please try again or review the integration settings.",
+        "We could not queue the proposal. Your form is still available; please try again.",
     }
   }
 }

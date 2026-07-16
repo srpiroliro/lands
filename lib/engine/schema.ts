@@ -18,6 +18,10 @@ export const aiLineItemDraftSchema = z.object({
 export const proposalDraftSchema = z.object({
   executiveSummary: z.string().min(20),
   customerMessage: z.string().min(20),
+  timeline: z
+    .string()
+    .min(2)
+    .default("Timeline to be confirmed during review."),
   lineItems: z.array(aiLineItemDraftSchema).min(1),
   assumptions: z.array(z.string()),
   unknowns: z.array(z.string()),

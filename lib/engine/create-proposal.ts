@@ -7,8 +7,6 @@ import { prisma } from "@/lib/db"
 import { validateProposalDraft } from "@/lib/domain/guardrails"
 import type { PricingCatalogForModel } from "@/lib/domain/types"
 import { env } from "@/lib/env"
-import type { LeadIntakeInput } from "@/lib/intake/types"
-import { media } from "@/lib/media"
 import { proposalAi } from "@/lib/proposal"
 import { proposalDraftSchema } from "@/lib/engine/schema"
 import type { ProposalCreateResult } from "@/lib/engine/types"
@@ -38,68 +36,83 @@ function toPricingCatalogForModel(
   }))
 }
 
-export async function createProposal(
-  input: LeadIntakeInput
+export async function finalizeProposalCreation(input: {
+  proposalId: string
+  leadId: string
+  leadName: string
+  leadEmail: string
+  leadPhone: string | null
+  blocked: boolean
+}): Promise<void> {
+  const nextStatus = input.blocked ? "BLOCKED" : "PENDING_REVIEW"
+  const internalUrl = proposalUrl(input.proposalId)
+
+  await prisma.$transaction([
+    prisma.lead.update({
+      where: { id: input.leadId },
+      data: { status: nextStatus },
+    }),
+    prisma.proposal.update({
+      where: { id: input.proposalId },
+      data: { status: nextStatus },
+    }),
+  ])
+
+  await crm.upsertLead({
+    leadId: input.leadId,
+    name: input.leadName,
+    email: input.leadEmail,
+    phone: input.leadPhone,
+  })
+  await crm.attachProposalLink({
+    leadId: input.leadId,
+    proposalId: input.proposalId,
+    url: internalUrl,
+  })
+}
+
+export async function createProposalForLead(
+  leadId: string
 ): Promise<ProposalCreateResult> {
-  const lead = await prisma.lead.create({
-    data: {
-      name: input.name,
-      email: input.email,
-      phone: input.phone,
-      address: input.address,
-      projectType: input.projectType,
-      budgetMinCents: input.budgetMinCents,
-      budgetMaxCents: input.budgetMaxCents,
-      notes: input.notes,
-      status: "DRAFTING",
-    },
-  })
+  const [lead, storedPhotos, pricingItems] = await Promise.all([
+    prisma.lead.findUnique({ where: { id: leadId } }),
+    prisma.photo.findMany({
+      where: { leadId },
+      select: { url: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.pricingItem.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        sku: true,
+        category: true,
+        name: true,
+        description: true,
+        unit: true,
+        unitPriceCents: true,
+        active: true,
+        requiresMeasurement: true,
+        requiresReview: true,
+        tags: true,
+      },
+      orderBy: { sku: "asc" },
+    }),
+  ])
 
-  const storedPhotos = []
-  for (const file of input.photos) {
-    storedPhotos.push(await media.saveLeadPhoto({ leadId: lead.id, file }))
+  if (!lead) {
+    throw new Error(`Lead ${leadId} was not found for proposal generation`)
   }
-
-  if (storedPhotos.length > 0) {
-    await prisma.photo.createMany({
-      data: storedPhotos.map((photo) => ({
-        leadId: lead.id,
-        url: photo.url,
-        downloadUrl: photo.downloadUrl,
-        pathname: photo.pathname,
-        contentType: photo.contentType,
-        sizeBytes: photo.sizeBytes,
-      })),
-    })
-  }
-
-  const pricingItems = await prisma.pricingItem.findMany({
-    where: { active: true },
-    select: {
-      id: true,
-      sku: true,
-      category: true,
-      name: true,
-      description: true,
-      unit: true,
-      unitPriceCents: true,
-      active: true,
-      requiresMeasurement: true,
-      requiresReview: true,
-      tags: true,
-    },
-    orderBy: { sku: "asc" },
-  })
 
   const leadForAi = {
-    name: input.name,
-    email: input.email,
-    phone: input.phone,
-    address: input.address,
-    projectType: input.projectType,
-    budgetMinCents: input.budgetMinCents,
-    budgetMaxCents: input.budgetMaxCents,
-    notes: input.notes,
+    name: lead.name,
+    email: lead.email,
+    phone: lead.phone,
+    address: lead.address,
+    projectType: lead.projectType,
+    budgetMinCents: lead.budgetMinCents,
+    budgetMaxCents: lead.budgetMaxCents,
+    notes: lead.notes,
   }
   const rawDraft = await proposalAi.draftProposal({
     lead: leadForAi,
@@ -115,8 +128,8 @@ export async function createProposal(
   })
   const validation = validateProposalDraft({
     pricingItems,
-    budgetMinCents: input.budgetMinCents,
-    budgetMaxCents: input.budgetMaxCents,
+    budgetMinCents: lead.budgetMinCents,
+    budgetMaxCents: lead.budgetMaxCents,
     draft,
     measurementAudit,
   })
@@ -195,11 +208,11 @@ export async function createProposal(
     leadName: lead.name,
     projectType: lead.projectType,
     totalCents: validation.totalCents,
+    description: draft.executiveSummary,
+    timeline: draft.timeline,
     blocked: validation.blocked,
     issues: validation.issues,
   })
-
-  const nextStatus = validation.blocked ? "BLOCKED" : "PENDING_REVIEW"
 
   await prisma.proposalReview.create({
     data: {
@@ -213,28 +226,18 @@ export async function createProposal(
     },
   })
 
-  await prisma.$transaction([
-    prisma.lead.update({
-      where: { id: lead.id },
-      data: { status: nextStatus },
-    }),
-    prisma.proposal.update({
-      where: { id: proposal.id },
-      data: { status: nextStatus },
-    }),
-  ])
-
-  await crm.upsertLead({
-    leadId: lead.id,
-    name: lead.name,
-    email: lead.email,
-    phone: lead.phone,
-  })
-  await crm.attachProposalLink({
-    leadId: lead.id,
+  await finalizeProposalCreation({
     proposalId: proposal.id,
-    url: internalUrl,
+    leadId: lead.id,
+    leadName: lead.name,
+    leadEmail: lead.email,
+    leadPhone: lead.phone,
+    blocked: validation.blocked,
   })
 
-  return { proposalId: proposal.id, versionId: version.id, blocked: false }
+  return {
+    proposalId: proposal.id,
+    versionId: version.id,
+    blocked: validation.blocked,
+  }
 }

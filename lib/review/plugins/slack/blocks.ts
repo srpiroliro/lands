@@ -3,6 +3,12 @@ import type {
   ReviewRequestMessage,
 } from "@/lib/review/types"
 
+const dollars = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+})
+
 function escapeSlackText(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -10,15 +16,35 @@ function escapeSlackText(value: string): string {
     .replaceAll(">", "&gt;")
 }
 
-function buildProposalReviewText(): string {
-  return "Proposal completed."
+function compactText(value: string, maxLength: number): string {
+  const compact = value.trim().replace(/\s+/g, " ")
+  if (compact.length <= maxLength) return compact
+  return `${compact.slice(0, maxLength - 1).trimEnd()}…`
 }
 
-function buildProposalReviewBlocks(input: {
-  proposalId: string
-  versionId: string
-  internalUrl: string
-}): unknown[] {
+function formatTotal(totalCents: number): string {
+  return dollars.format(totalCents / 100)
+}
+
+function buildProposalReviewText(input: ProposalReviewRequest): string {
+  const leadName = escapeSlackText(compactText(input.leadName, 120))
+  const projectType = escapeSlackText(compactText(input.projectType, 120))
+  const timeline = escapeSlackText(compactText(input.timeline, 120))
+  const description = escapeSlackText(compactText(input.description, 180))
+
+  return [
+    `Proposal completed for ${leadName}.`,
+    `${projectType} · ${formatTotal(input.totalCents)} · ${timeline}.`,
+    description,
+  ].join(" ")
+}
+
+function buildProposalReviewBlocks(input: ProposalReviewRequest): unknown[] {
+  const leadName = escapeSlackText(compactText(input.leadName, 120))
+  const projectType = escapeSlackText(compactText(input.projectType, 120))
+  const timeline = escapeSlackText(compactText(input.timeline, 120))
+  const description = escapeSlackText(compactText(input.description, 500))
+
   return [
     {
       type: "header",
@@ -26,9 +52,25 @@ function buildProposalReviewBlocks(input: {
     },
     {
       type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Lead*\n${leadName}` },
+        { type: "mrkdwn", text: `*Project*\n${projectType}` },
+        {
+          type: "mrkdwn",
+          text: `*Total*\n${formatTotal(input.totalCents)}`,
+        },
+        { type: "mrkdwn", text: `*Timeline*\n${timeline}` },
+      ],
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*Description*\n${description}` },
+    },
+    {
+      type: "section",
       text: {
         type: "mrkdwn",
-        text: `<${escapeSlackText(input.internalUrl)}|Open proposal>`,
+        text: `<${escapeSlackText(input.internalProposalUrl)}|Open proposal>`,
       },
     },
     {
@@ -68,11 +110,7 @@ export function buildProposalReviewMessage(
   return {
     proposalId: input.proposalId,
     versionId: input.versionId,
-    summaryText: buildProposalReviewText(),
-    blocks: buildProposalReviewBlocks({
-      proposalId: input.proposalId,
-      versionId: input.versionId,
-      internalUrl: input.internalProposalUrl,
-    }),
+    summaryText: buildProposalReviewText(input),
+    blocks: buildProposalReviewBlocks(input),
   }
 }

@@ -17,6 +17,7 @@ const proposalDraftJsonSchema = {
   required: [
     "executiveSummary",
     "customerMessage",
+    "timeline",
     "lineItems",
     "assumptions",
     "unknowns",
@@ -26,6 +27,7 @@ const proposalDraftJsonSchema = {
   properties: {
     executiveSummary: { type: "string", minLength: 20 },
     customerMessage: { type: "string", minLength: 20 },
+    timeline: { type: "string", minLength: 2 },
     lineItems: {
       type: "array",
       minItems: 1,
@@ -103,6 +105,7 @@ Treat measurements and counts in lead.notes as authoritative site-walk input. If
 Only when notes contain no applicable measurement or count may you estimate from photos. Mark those quantities as AI_ESTIMATE, reduce confidence, and explain in notes that the quantity was estimated from photos.
 The quantity field is only the measurement or count amount for the selected catalog item unit: sf means square feet, lf means linear feet, and ea means each/count. For example, 500 sf of pavers returns quantity 500, 20 lf of outdoor kitchen returns quantity 20, and 1 grill insert returns quantity 1.
 Do not calculate proposal totals, line-item prices, or price-derived quantities. Return only SKUs, measurement/count quantities, quantity sources, confidence, notes, assumptions, unknowns, and narrative fields. Pricing is calculated later by the app from the catalog.
+Include a concise, realistic project timeline based on the scope. State when the timeline depends on permitting, material availability, measurements, or other unknowns.
 If the likely project scope is large enough to require design review, include a concise renderBrief for Carlos.
 Return only schema-valid JSON.`
 

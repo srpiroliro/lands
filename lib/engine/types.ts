@@ -11,6 +11,7 @@ export type AiLineItemDraft = {
 export type ProposalDraft = {
   executiveSummary: string
   customerMessage: string
+  timeline: string
   lineItems: AiLineItemDraft[]
   assumptions: string[]
   unknowns: string[]

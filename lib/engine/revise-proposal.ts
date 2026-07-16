@@ -46,6 +46,8 @@ async function requestReviewForVersion(input: {
   leadName: string
   projectType: string
   totalCents: number
+  description: string
+  timeline: string
   blocked: boolean
   issues: GuardrailIssueDraft[]
   slackThreadTs?: string
@@ -57,6 +59,8 @@ async function requestReviewForVersion(input: {
     leadName: input.leadName,
     projectType: input.projectType,
     totalCents: input.totalCents,
+    description: input.description,
+    timeline: input.timeline,
     blocked: input.blocked,
     issues: input.issues,
   }
@@ -255,6 +259,8 @@ export async function reviseProposalFromFeedback(input: {
       leadName: proposal.lead.name,
       projectType: proposal.lead.projectType,
       totalCents: validation.totalCents,
+      description: draft.executiveSummary,
+      timeline: draft.timeline,
       blocked: validation.blocked,
       issues: validation.issues,
       slackThreadTs: input.slackThreadTs,

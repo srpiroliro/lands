@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useEffect, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 
 import { submitProposalIntake } from "@/app/actions"
@@ -45,10 +45,16 @@ export function IntakeForm() {
     submitProposalIntake,
     initialState
   )
+  const formRef = useRef<HTMLFormElement>(null)
+
+  useEffect(() => {
+    if (state.ok) formRef.current?.reset()
+  }, [state])
 
   return (
     <form
       action={formAction}
+      ref={formRef}
       className="space-y-6 rounded-2xl border bg-card p-6 shadow-sm"
     >
       <div>
@@ -70,14 +76,6 @@ export function IntakeForm() {
           aria-live="polite"
         >
           <p>{state.message}</p>
-          {state.ok && state.proposalId ? (
-            <a
-              className="mt-2 inline-flex font-medium underline underline-offset-4 focus:ring-3 focus:ring-ring/40 focus:outline-none"
-              href={`/proposals/${state.proposalId}`}
-            >
-              Open internal proposal review
-            </a>
-          ) : null}
         </div>
       ) : null}
 
@@ -291,7 +289,7 @@ export function IntakeForm() {
         type="submit"
         disabled={pending}
       >
-        {pending ? "Drafting proposal…" : "Generate proposal draft"}
+        {pending ? "Queueing proposal…" : "Queue proposal draft"}
       </Button>
     </form>
   )

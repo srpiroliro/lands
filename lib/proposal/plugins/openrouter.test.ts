@@ -86,6 +86,7 @@ describe("openRouterProposalAiPlugin.auditMeasurements", () => {
           "Premium backyard patio proposal with pavers and site preparation.",
         customerMessage:
           "Thanks for trusting Greenscape Pro with your backyard transformation.",
+        timeline: "4–6 weeks after material selection.",
         lineItems: [
           {
             sku: "PAVER-SF",

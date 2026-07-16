@@ -3,7 +3,8 @@ import type { Prisma } from "@prisma/client"
 import type { CrmPlugin } from "@/lib/crm/types"
 import { prisma } from "@/lib/db"
 
-type GhlDemoEventType = "upsertLead" | "attachProposalLink" | "recordProposalDelivered"
+type GhlDemoEventType =
+  "upsertLead" | "attachProposalLink" | "recordProposalDelivered"
 
 function toJsonPayload(input: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(input)) as Prisma.InputJsonValue
@@ -14,6 +15,16 @@ async function recordIntegrationEvent(input: {
   externalId?: string
   payload: unknown
 }): Promise<void> {
+  const existing = await prisma.integrationEvent.findFirst({
+    where: {
+      provider: "ghl-demo",
+      eventType: input.eventType,
+      externalId: input.externalId ?? null,
+    },
+    select: { id: true },
+  })
+  if (existing) return
+
   await prisma.integrationEvent.create({
     data: {
       provider: "ghl-demo",
@@ -27,7 +38,11 @@ async function recordIntegrationEvent(input: {
 
 export const ghlDemoCrmPlugin: CrmPlugin = {
   upsertLead(input) {
-    return recordIntegrationEvent({ eventType: "upsertLead", externalId: input.leadId, payload: input })
+    return recordIntegrationEvent({
+      eventType: "upsertLead",
+      externalId: input.leadId,
+      payload: input,
+    })
   },
 
   attachProposalLink(input) {

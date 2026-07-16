@@ -53,4 +53,11 @@ export const slackReviewPlugin: ReviewPlugin = {
       text: input.text,
     })
   },
+
+  async postChannelMessage(input) {
+    await slack.chat.postMessage({
+      channel: env.SLACK_REVIEW_CHANNEL_ID,
+      text: input.text,
+    })
+  },
 }

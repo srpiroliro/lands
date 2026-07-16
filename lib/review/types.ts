@@ -7,6 +7,8 @@ export type ProposalReviewRequest = {
   leadName: string
   projectType: string
   totalCents: number
+  description: string
+  timeline: string
   blocked: boolean
   issues: GuardrailIssueDraft[]
 }
@@ -35,6 +37,7 @@ export interface ReviewPlugin {
     slackThreadTs: string
     text: string
   }): Promise<void>
+  postChannelMessage(input: { text: string }): Promise<void>
 }
 
 export type SlackActionId = "proposal_approve" | "proposal_reject"

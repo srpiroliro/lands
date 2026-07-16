@@ -15,6 +15,5 @@ export type LeadIntakeInput = {
 export type IntakeActionState = {
   ok: boolean
   message: string
-  proposalId?: string
   errors?: Record<string, string[]>
 }

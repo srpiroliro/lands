@@ -15,6 +15,7 @@ const envSchema = z.object({
   SLACK_BOT_TOKEN: z.string().min(1),
   SLACK_SIGNING_SECRET: z.string().min(1),
   SLACK_REVIEW_CHANNEL_ID: z.string().min(1),
+  CRON_SECRET: z.string().min(1).optional(),
   DELIVERY_PLUGIN: z.enum(["resend", "sendgrid", "slack"]).default("resend"),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().optional(),

@@ -1,6 +1,32 @@
 import { describe, expect, it } from "vitest"
 
-import { measurementAuditResultSchema } from "./schema"
+import { measurementAuditResultSchema, proposalDraftSchema } from "./schema"
+
+describe("proposalDraftSchema", () => {
+  it("defaults the timeline for proposal versions created before timeline support", () => {
+    const result = proposalDraftSchema.parse({
+      executiveSummary:
+        "Premium backyard patio proposal with pavers and site preparation.",
+      customerMessage:
+        "Thanks for trusting Greenscape Pro with your backyard transformation.",
+      lineItems: [
+        {
+          sku: "PAVER-SF",
+          quantity: 500,
+          quantitySource: "USER",
+          confidence: 0.9,
+          notes: "Measured during the site walk.",
+        },
+      ],
+      assumptions: [],
+      unknowns: [],
+      renderBrief: null,
+      confidence: 0.9,
+    })
+
+    expect(result.timeline).toBe("Timeline to be confirmed during review.")
+  })
+})
 
 describe("measurementAuditResultSchema", () => {
   it("accepts schema-valid measurement audit output", () => {

@@ -4,6 +4,8 @@ AI-assisted proposal workflow for Greenscape Pro. The app turns lead intake note
 
 ## Application flow
 
+Valid website submissions persist the lead, uploaded photos, and a proposal-generation queue record before they are acknowledged as queued. Next.js `after()` then runs proposal generation, Slack review delivery, and CRM synchronization after the response so the intake form is ready for another submission.
+
 ```mermaid
 flowchart TD
   A[Lead intake form] --> B[Next.js Server Action]
@@ -190,18 +192,33 @@ Core tables in `prisma/schema.prisma`:
 - `ProposalReview`: Slack review thread and decision state.
 - `RevisionRequest`: reviewer feedback that triggers an AI revision.
 - `DeliveryLog`: outbound proposal delivery attempts and provider message IDs.
-- `IntegrationEvent`: stored webhook or integration event payloads.
+- `IntegrationEvent`: stored webhook and integration payloads, including durable proposal-generation queue state.
 
 ## External integrations
 
 | Integration | Purpose | Environment variables |
 | --- | --- | --- |
 | OpenRouter | Vision-capable AI proposal drafting and measurement audit | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_FALLBACK_MODEL`, `OPENROUTER_SITE_URL`, `OPENROUTER_APP_NAME` |
-| Slack | Human approval, rejection, and threaded revision feedback | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_REVIEW_CHANNEL_ID`, `SLACK_DELIVERY_CHANNEL_ID` |
+| Slack | Human approval, rejection, threaded revision feedback, and proposal command | `APP_BASE_URL`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_REVIEW_CHANNEL_ID`, `SLACK_DELIVERY_CHANNEL_ID` |
 | Resend | Default customer email delivery | `RESEND_API_KEY`, `RESEND_FROM` |
 | SendGrid | Optional customer email delivery | `SENDGRID_API_KEY`, `SENDGRID_FROM` |
 | Vercel Blob | Lead photo storage for AI vision calls | `BLOB_READ_WRITE_TOKEN` |
 | Neon/Postgres | Persistent application database | `DATABASE_URL`, `DIRECT_URL` |
+| Vercel Cron | Recovers queued or interrupted proposal jobs | `CRON_SECRET` |
+
+### Slack proposal command
+
+Create a Slack slash command such as `/proposal` with this request URL:
+
+```text
+https://your-domain.example/api/slack/commands
+```
+
+Running the command without text returns an ephemeral link to the proposal builder. Requests are verified with `SLACK_SIGNING_SECRET`. In production, set `APP_BASE_URL` to the publicly reachable HTTPS deployment URL without a trailing slash.
+
+### Proposal queue recovery
+
+`vercel.json` runs `/api/jobs/proposals` every minute. The route requires Vercel's `Authorization: Bearer $CRON_SECRET` header, processes queued jobs, and reclaims expired processing leases. Set `CRON_SECRET` in the deployment environment before enabling the cron.
 
 ## Local development
 

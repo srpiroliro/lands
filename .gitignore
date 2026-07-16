@@ -11,6 +11,9 @@
 # testing
 /coverage
 
+# local agent artifacts
+/.pi-subagents/
+
 # next.js
 /.next/
 /out/

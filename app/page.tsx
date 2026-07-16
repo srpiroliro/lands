@@ -2,6 +2,8 @@ import { Suspense } from "react"
 
 import { IntakeForm } from "@/components/proposal/intake-form"
 
+export const maxDuration = 300
+
 const architectureSteps = [
   "Photos",
   "Vision",
