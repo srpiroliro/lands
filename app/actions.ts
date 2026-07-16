@@ -83,7 +83,6 @@ export async function submitProposalIntake(
     budgetMinCents: dollarsToCents(fields.budgetMin),
     budgetMaxCents: dollarsToCents(fields.budgetMax),
     notes: fields.notes,
-    photos,
   }
 
   try {
@@ -91,7 +90,7 @@ export async function submitProposalIntake(
 
     after(async () => {
       try {
-        await processQueuedProposal(jobId)
+        await processQueuedProposal(jobId, photos)
       } catch (error) {
         console.error("Queued proposal generation failed", error)
       }

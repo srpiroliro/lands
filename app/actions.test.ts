@@ -75,7 +75,9 @@ describe("submitProposalIntake", () => {
     expect(generate).toBeDefined()
     await generate?.()
 
-    expect(mocks.processQueuedProposal).toHaveBeenCalledWith("job-1")
+    expect(mocks.processQueuedProposal).toHaveBeenCalledWith("job-1", [
+      expect.any(File),
+    ])
   })
 
   it("keeps the form state when durable queueing fails", async () => {

@@ -4,23 +4,24 @@ AI-assisted proposal workflow for Greenscape Pro. The app turns lead intake note
 
 ## Application flow
 
-Valid website submissions persist the lead, uploaded photos, and a proposal-generation queue record before they are acknowledged as queued. Next.js `after()` then runs proposal generation, Slack review delivery, and CRM synchronization after the response so the intake form is ready for another submission.
+Valid website submissions persist the lead and a proposal-generation queue record, then return immediately. Next.js `after()` uploads photos and runs proposal generation, Slack review delivery, and CRM synchronization after the response so the intake form remains available for additional submissions.
 
 ```mermaid
 flowchart TD
   A[Lead intake form] --> B[Next.js Server Action]
   B --> C{Validate lead fields and photo files}
   C -- invalid --> D[Return field errors to UI]
-  C -- valid --> E[Create Lead in Postgres]
-  E --> F[Store uploaded photos in Vercel Blob]
-  F --> G[Load active PricingItem catalog]
-  G --> H[AI draft proposal]
-  H --> I[AI measurement audit]
-  I --> J[Domain guardrails and pricing]
-  J --> K[Persist Proposal, Version, LineItems, GuardrailIssues]
-  K --> L{Blocking guardrail?}
-  L -- yes --> M[Mark Lead and Proposal BLOCKED]
-  L -- no --> N[Mark Lead and Proposal PENDING_REVIEW]
+  C -- valid --> E[Persist Lead and queued job]
+  E --> F[Return queued success to UI]
+  E --> G[After response: store photos in Vercel Blob]
+  G --> H[Load active PricingItem catalog]
+  H --> I[AI draft proposal]
+  I --> J[AI measurement audit]
+  J --> K[Domain guardrails and pricing]
+  K --> Persisted[Persist Proposal, Version, LineItems, GuardrailIssues]
+  Persisted --> BlockedCheck{Blocking guardrail?}
+  BlockedCheck -- yes --> M[Mark Lead and Proposal BLOCKED]
+  BlockedCheck -- no --> N[Mark Lead and Proposal PENDING_REVIEW]
   M --> O[Post Slack review request]
   N --> O
   O --> P{Reviewer action in Slack}
@@ -192,7 +193,7 @@ Core tables in `prisma/schema.prisma`:
 - `ProposalReview`: Slack review thread and decision state.
 - `RevisionRequest`: reviewer feedback that triggers an AI revision.
 - `DeliveryLog`: outbound proposal delivery attempts and provider message IDs.
-- `IntegrationEvent`: stored webhook and integration payloads, including durable proposal-generation queue state.
+- `IntegrationEvent`: stored webhook and integration payloads, including simulated proposal-generation queue state.
 
 ## External integrations
 
@@ -204,7 +205,6 @@ Core tables in `prisma/schema.prisma`:
 | SendGrid | Optional customer email delivery | `SENDGRID_API_KEY`, `SENDGRID_FROM` |
 | Vercel Blob | Lead photo storage for AI vision calls | `BLOB_READ_WRITE_TOKEN` |
 | Neon/Postgres | Persistent application database | `DATABASE_URL`, `DIRECT_URL` |
-| Vercel Cron | Recovers queued or interrupted proposal jobs | `CRON_SECRET` |
 
 ### Slack proposal command
 
@@ -215,10 +215,6 @@ https://your-domain.example/api/slack/commands
 ```
 
 Running the command without text returns an ephemeral link to the proposal builder. Requests are verified with `SLACK_SIGNING_SECRET`. In production, set `APP_BASE_URL` to the publicly reachable HTTPS deployment URL without a trailing slash.
-
-### Proposal queue recovery
-
-`vercel.json` runs `/api/jobs/proposals` every minute. The route requires Vercel's `Authorization: Bearer $CRON_SECRET` header, processes queued jobs, and reclaims expired processing leases. Set `CRON_SECRET` in the deployment environment before enabling the cron.
 
 ## Local development
 
