@@ -116,6 +116,12 @@ describe("openRouterProposalAiPlugin.auditMeasurements", () => {
     expect(secondBody.messages[0].content).toContain(
       "Do not calculate prices or totals"
     )
+    expect(secondBody.messages[0].content).toContain(
+      "quantitySource USER or MANUAL_OVERRIDE must never receive NO_SCALE_REFERENCE"
+    )
+    expect(secondBody.messages[0].content).toContain(
+      "Never emit NO_SCALE_REFERENCE for ea/count items"
+    )
     expect(secondBody.messages[1].content[0].text).toContain("draftLineItems")
   })
 })

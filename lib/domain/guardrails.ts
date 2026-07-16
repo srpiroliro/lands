@@ -161,7 +161,31 @@ export function validateProposalDraft(input: {
     })
   }
 
+  const draftLineItemsBySku = new Map(
+    input.draft.lineItems.map((lineItem) => [lineItem.sku, lineItem])
+  )
+
   for (const auditIssue of input.measurementAudit?.issues ?? []) {
+    const pricingItem = pricingBySku.get(auditIssue.sku)
+    const draftLineItem = draftLineItemsBySku.get(auditIssue.sku)
+
+    // Audit output is model-generated. Ignore issues for lines that are not
+    // actually in this draft instead of allowing hallucinated SKUs to block it.
+    if (!pricingItem || !draftLineItem) continue
+
+    if (auditIssue.code === "NO_SCALE_REFERENCE") {
+      const unit = pricingItem.unit.toLowerCase()
+      const isPhotoOnlyMeasuredUnit =
+        pricingItem.requiresMeasurement &&
+        (unit === "sf" || unit === "lf") &&
+        draftLineItem.quantitySource === "AI_ESTIMATE"
+
+      // A missing photo scale is irrelevant to user/manual measurements and
+      // count-based items. Enforce this rule in code rather than trusting the
+      // auditor to apply it consistently.
+      if (!isPhotoOnlyMeasuredUnit) continue
+    }
+
     issues.push({
       severity: auditIssue.severity,
       code: auditIssue.code,

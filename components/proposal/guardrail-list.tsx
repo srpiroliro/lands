@@ -4,62 +4,74 @@ type GuardrailListProps = {
   issues: GuardrailIssueView[]
 }
 
-const severityClassNames: Record<string, string> = {
-  BLOCKING: "border-destructive/40 bg-destructive/10 text-destructive",
-  WARNING:
-    "border-yellow-300 bg-yellow-50 text-yellow-900 dark:border-yellow-900/60 dark:bg-yellow-950/40 dark:text-yellow-100",
-  INFO: "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-100",
+type IssueAccordionProps = {
+  emptyMessage: string
+  issues: GuardrailIssueView[]
+  title: string
+}
+
+function IssueAccordion({ emptyMessage, issues, title }: IssueAccordionProps) {
+  return (
+    <details className="group rounded-xl border bg-background">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 font-medium [&::-webkit-details-marker]:hidden">
+        <span>{title}</span>
+        <span className="flex items-center gap-2">
+          <span className="rounded-full border bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+            {issues.length}
+          </span>
+          <span
+            className="text-muted-foreground transition-transform group-open:rotate-180"
+            aria-hidden="true"
+          >
+            ⌄
+          </span>
+        </span>
+      </summary>
+      <div className="border-t px-4 py-3">
+        {issues.length > 0 ? (
+          <ul className="list-disc space-y-2 pl-5 text-sm leading-6">
+            {issues.map((issue, index) => (
+              <li key={`${issue.message}-${index}`}>{issue.message}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+        )}
+      </div>
+    </details>
+  )
 }
 
 export function GuardrailList({ issues }: GuardrailListProps) {
+  const blockers = issues.filter((issue) => issue.severity === "BLOCKING")
+  const warnings = issues.filter((issue) => issue.severity === "WARNING")
+
   return (
     <section
       className="rounded-2xl border bg-card p-6 shadow-sm"
       aria-labelledby="guardrails-title"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold" id="guardrails-title">
-            Guardrails
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Internal blockers and warnings from pricing validation.
-          </p>
-        </div>
-        <span className="rounded-full border bg-background px-3 py-1 text-sm font-medium">
-          {issues.length} issue{issues.length === 1 ? "" : "s"}
-        </span>
+      <div>
+        <h2 className="text-xl font-semibold" id="guardrails-title">
+          Guardrails
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Review the current blockers and warnings for this proposal.
+        </p>
       </div>
 
-      {issues.length === 0 ? (
-        <p className="mt-4 rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
-          No guardrail issues were raised for this version.
-        </p>
-      ) : (
-        <ul className="mt-4 space-y-3">
-          {issues.map((issue) => (
-            <li
-              className={`rounded-xl border p-4 ${
-                severityClassNames[issue.severity] ?? severityClassNames.INFO
-              }`}
-              key={`${issue.severity}-${issue.code}-${issue.message}`}
-            >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-semibold">{issue.message}</p>
-                <span className="text-xs font-bold tracking-wide uppercase">
-                  {issue.severity}
-                </span>
-              </div>
-              <p className="mt-1 font-mono text-xs opacity-80">{issue.code}</p>
-              {issue.metadata ? (
-                <pre className="mt-3 overflow-x-auto rounded-lg bg-background/80 p-3 text-xs text-foreground">
-                  {JSON.stringify(issue.metadata, null, 2)}
-                </pre>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="mt-4 space-y-3">
+        <IssueAccordion
+          title="Blockers"
+          issues={blockers}
+          emptyMessage="No blockers."
+        />
+        <IssueAccordion
+          title="Warnings"
+          issues={warnings}
+          emptyMessage="No warnings."
+        />
+      </div>
     </section>
   )
 }

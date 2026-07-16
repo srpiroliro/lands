@@ -99,14 +99,23 @@ const measurementAuditJsonSchema = {
 
 const systemPrompt = `You draft proposals for Greenscape Pro, a premium Phoenix residential hardscape/landscape design-build company.
 Use only provided pricing SKUs. Do not invent SKUs.
-If notes provide measurements, use those measurements and mark quantitySource USER.
-If photos imply scope but measurements are missing, estimate conservatively, mark quantitySource AI_ESTIMATE, reduce confidence, and explain in notes.
+Treat measurements and counts in lead.notes as authoritative site-walk input. If notes provide an explicit quantity, count, or dimensions from which the quantity can be directly derived, use that quantity and mark quantitySource USER. A USER quantity does not need a visible scale reference in a photo.
+Only when notes contain no applicable measurement or count may you estimate from photos. Mark those quantities as AI_ESTIMATE, reduce confidence, and explain in notes that the quantity was estimated from photos.
 The quantity field is only the measurement or count amount for the selected catalog item unit: sf means square feet, lf means linear feet, and ea means each/count. For example, 500 sf of pavers returns quantity 500, 20 lf of outdoor kitchen returns quantity 20, and 1 grill insert returns quantity 1.
 Do not calculate proposal totals, line-item prices, or price-derived quantities. Return only SKUs, measurement/count quantities, quantity sources, confidence, notes, assumptions, unknowns, and narrative fields. Pricing is calculated later by the app from the catalog.
 If the likely project scope is large enough to require design review, include a concise renderBrief for Carlos.
 Return only schema-valid JSON.`
 
-const measurementAuditSystemPrompt = `You are a construction measurement QA auditor for Greenscape Pro. Your job is to find risky measurement quantities in a proposal draft. Do not calculate prices or totals. Review only whether the quantity amount for each SKU is supported by notes/photos and matches the catalog unit. sf means square feet, lf means linear feet, ea means each/count. Photo-only sf/lf estimates without a scale reference should be flagged as BLOCKING NO_SCALE_REFERENCE or MEASUREMENT_NEEDS_CONFIRMATION. If the draft quantity appears inconsistent with visible evidence or notes, flag MEASUREMENT_DISAGREEMENT. If an item uses the wrong kind of unit, flag UNIT_MISMATCH_RISK. Return only schema-valid JSON.`
+const measurementAuditSystemPrompt = `You are a construction measurement QA auditor for Greenscape Pro. Your job is to find risky measurement quantities in a proposal draft. Do not calculate prices or totals. Review only whether the quantity amount for each SKU is supported by notes/photos and matches the catalog unit. sf means square feet, lf means linear feet, and ea means each/count.
+
+Evidence rules, in priority order:
+1. Measurements and counts in lead.notes are authoritative site-walk evidence. They do not need to be visually measurable or have a scale reference in a photo.
+2. A draft line with quantitySource USER or MANUAL_OVERRIDE must never receive NO_SCALE_REFERENCE.
+3. NO_SCALE_REFERENCE applies only to an sf or lf line whose quantitySource is AI_ESTIMATE and whose quantity is supported only by photos with no scale reference. Emit it as BLOCKING.
+4. Never emit NO_SCALE_REFERENCE for ea/count items. Counts such as lighting fixtures are supported by an explicit count in the notes.
+5. Do not emit an issue for a quantity that is supported by an explicit measurement or count in lead.notes and agrees with that evidence.
+
+If a draft quantity conflicts with explicit evidence in the notes or photos, flag MEASUREMENT_DISAGREEMENT. If an item uses the wrong kind of unit, flag UNIT_MISMATCH_RISK. Use MEASUREMENT_NEEDS_CONFIRMATION as a WARNING for uncertainty that does not meet the exact NO_SCALE_REFERENCE rule. Return only schema-valid JSON.`
 
 type OpenRouterContentPart =
   | { type: "text"; text: string }

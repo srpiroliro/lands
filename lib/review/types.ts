@@ -16,10 +16,6 @@ export type ReviewRequestMessage = {
   versionId: string
   summaryText: string
   blocks: unknown[]
-  totalCents?: number
-  warnings?: string[]
-  blockers?: string[]
-  internalProposalUrl?: string
 }
 
 export type ReviewThreadRef = {

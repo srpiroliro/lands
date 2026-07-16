@@ -81,4 +81,62 @@ describe("validateProposalDraft measurement audit conversion", () => {
       },
     })
   })
+
+  it("ignores no-scale findings for user measurements and count items", () => {
+    const measuredDraft: ProposalDraft = {
+      ...draft,
+      lineItems: [
+        {
+          ...draft.lineItems[0]!,
+          quantitySource: "USER",
+          notes: "Marcus measured 20 ft by 25 ft during the site walk.",
+        },
+        {
+          sku: "LIGHT-EA",
+          quantity: 8,
+          quantitySource: "AI_ESTIMATE",
+          confidence: 0.9,
+          notes: "Eight fixtures requested in the site-walk notes.",
+        },
+      ],
+    }
+    const lightingItem: PricingCatalogItem = {
+      id: "price-light",
+      sku: "LIGHT-EA",
+      category: "lighting",
+      name: "Landscape lighting fixture",
+      description: "Installed low-voltage fixture",
+      unit: "ea",
+      unitPriceCents: 28_500,
+      active: true,
+      requiresMeasurement: false,
+      requiresReview: false,
+      tags: [],
+    }
+    const falsePositiveAudit: MeasurementAuditResult = {
+      issues: [
+        measurementAudit.issues[0]!,
+        {
+          sku: "LIGHT-EA",
+          severity: "BLOCKING",
+          code: "NO_SCALE_REFERENCE",
+          message: "Confirm lighting quantity before sending.",
+          modelSuggestedQuantity: null,
+          confidence: 0.3,
+          reason: "No scale reference is visible in the photos.",
+        },
+      ],
+      overallRisk: "HIGH",
+      summary: "The model incorrectly requested photo scale references.",
+    }
+
+    const validation = validateProposalDraft({
+      pricingItems: [...pricingItems, lightingItem],
+      draft: measuredDraft,
+      measurementAudit: falsePositiveAudit,
+    })
+
+    expect(validation.blocked).toBe(false)
+    expect(validation.issues).toEqual([])
+  })
 })

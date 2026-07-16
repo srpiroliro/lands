@@ -1,16 +1,7 @@
-import type { GuardrailIssueDraft } from "@/lib/domain/types"
 import type {
   ProposalReviewRequest,
   ReviewRequestMessage,
 } from "@/lib/review/types"
-
-function formatCents(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(cents / 100)
-}
 
 function escapeSlackText(value: string): string {
   return value
@@ -19,83 +10,54 @@ function escapeSlackText(value: string): string {
     .replaceAll(">", "&gt;")
 }
 
-function issueLabel(issue: GuardrailIssueDraft): string {
-  return `*${issue.severity}* \`${escapeSlackText(issue.code)}\`: ${escapeSlackText(issue.message)}`
-}
-
-function blockersFromIssues(
-  issues: Array<{ severity: string; code: string; message: string }>
-): string[] {
-  return issues
-    .filter((issue) => issue.severity === "BLOCKING")
-    .map((issue) => `${issue.code}: ${issue.message}`)
-}
-
-function warningsFromIssues(
-  issues: Array<{ severity: string; code: string; message: string }>
-): string[] {
-  return issues
-    .filter((issue) => issue.severity === "WARNING")
-    .map((issue) => `${issue.code}: ${issue.message}`)
-}
-
-function buildProposalReviewText(input: {
-  leadName: string
-  projectType: string
-  totalCents: number
-  blocked: boolean
-}): string {
-  const status = input.blocked ? "blocked by guardrails" : "ready for review"
-  return `Proposal ${status}: ${input.leadName} — ${input.projectType} (${formatCents(input.totalCents)})`
+function buildProposalReviewText(): string {
+  return "Proposal completed."
 }
 
 function buildProposalReviewBlocks(input: {
   proposalId: string
   versionId: string
   internalUrl: string
-  leadName: string
-  projectType: string
-  totalCents: number
-  issues: GuardrailIssueDraft[]
 }): unknown[] {
-  const blockingIssueLines = input.issues
-    .filter((issue) => issue.severity === "BLOCKING")
-    .map(issueLabel)
-
   return [
     {
+      type: "header",
+      text: { type: "plain_text", text: "Proposal completed" },
+    },
+    {
       type: "section",
-      fields: [
-        { type: "mrkdwn", text: `*Lead:*\n${escapeSlackText(input.leadName)}` },
+      text: {
+        type: "mrkdwn",
+        text: `<${escapeSlackText(input.internalUrl)}|Open proposal>`,
+      },
+    },
+    {
+      type: "context",
+      elements: [
         {
           type: "mrkdwn",
-          text: `*Project:*\n${escapeSlackText(input.projectType)}`,
-        },
-        { type: "mrkdwn", text: `*Proposal ID:*\n\`${input.proposalId}\`` },
-        { type: "mrkdwn", text: `*Version ID:*\n\`${input.versionId}\`` },
-        { type: "mrkdwn", text: `*Total:*\n${formatCents(input.totalCents)}` },
-        {
-          type: "mrkdwn",
-          text: `*Blocking issues:*\n${blockingIssueLines.length}`,
+          text: "Reply in this thread with changes and I will revise the proposal.",
         },
       ],
     },
     {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*Draft workspace:* <${input.internalUrl}|Open proposal draft>`,
-      },
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text:
-          blockingIssueLines.length > 0
-            ? `*Blocking details*\n${blockingIssueLines.slice(0, 10).join("\n")}`
-            : "*Blocking details*\nNo blocking issues found.",
-      },
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Approve" },
+          style: "primary",
+          action_id: "proposal_approve",
+          value: `${input.proposalId}:${input.versionId}`,
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Reject" },
+          style: "danger",
+          action_id: "proposal_reject",
+          value: `${input.proposalId}:${input.versionId}`,
+        },
+      ],
     },
   ]
 }
@@ -106,19 +68,11 @@ export function buildProposalReviewMessage(
   return {
     proposalId: input.proposalId,
     versionId: input.versionId,
-    summaryText: buildProposalReviewText(input),
+    summaryText: buildProposalReviewText(),
     blocks: buildProposalReviewBlocks({
       proposalId: input.proposalId,
       versionId: input.versionId,
       internalUrl: input.internalProposalUrl,
-      leadName: input.leadName,
-      projectType: input.projectType,
-      totalCents: input.totalCents,
-      issues: input.issues,
     }),
-    totalCents: input.totalCents,
-    warnings: warningsFromIssues(input.issues),
-    blockers: blockersFromIssues(input.issues),
-    internalProposalUrl: input.internalProposalUrl,
   }
 }
